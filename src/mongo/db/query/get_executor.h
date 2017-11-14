@@ -26,6 +26,7 @@
  *    it in the license file.
  */
 
+#include "mongo/db/commands/count_cmd_gen.h"
 #include "mongo/db/ops/delete_request.h"
 #include "mongo/db/ops/parsed_delete.h"
 #include "mongo/db/ops/parsed_update.h"
@@ -41,7 +42,6 @@
 namespace mongo {
 
 class Collection;
-class CountRequest;
 
 struct GroupRequest;
 
@@ -127,7 +127,7 @@ StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDist
 StatusWith<std::unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
     OperationContext* opCtx,
     Collection* collection,
-    const CountRequest& request,
+    const CountRequestIDL& request,
     bool explain,
     PlanExecutor::YieldPolicy yieldPolicy);
 

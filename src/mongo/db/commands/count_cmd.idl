@@ -1,0 +1,61 @@
+# Copyright (C) 2017 MongoDB Inc.
+#
+# This program is free software: you can redistribute it and/or  modify
+# it under the terms of the GNU Affero General Public License, version 3,
+# as published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+global:
+    cpp_namespace: "mongo"
+    cpp_includes:
+       - "mongo/db/commands.h"
+       - "mongo/db/commands/hint_parser.h"
+
+imports:
+    - "mongo/idl/basic_types.idl"
+
+types:
+    hint:
+        bson_serialization_type: any
+        description: "A type that accepts either a document or a string necessary for the 'hint' field."
+        cpp_type: "mongo::BSONObj"
+        deserializer: "::mongo::hintDeserializer"
+
+commands:
+
+    countRequestIDL:
+        description: "Parser for the 'count' command."
+        namespace: concatenate_with_uuid
+        fields:
+            skip:
+                description: "The number of matching documents to skip before returning results."
+                type: safeInt64
+                optional: true
+            hint:
+                description: "The index to use. Specify either the index name as a string or the index specification document."
+                type: hint
+                optional: true
+            query:
+                description: "A query that selects which documents to count in the collection or view."
+                type: object
+                optional: true
+            limit:
+                description: "The maximum number of matching documents to return."
+                type: safeInt64
+                optional: true
+            collation:
+                description: "Specifies the collation to use for the operation."
+                type: object
+                optional: true
+            comment:
+                description: "Associates a comment to any expression taking a query predicate."
+                type: string
+                optional: true

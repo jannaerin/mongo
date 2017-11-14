@@ -1260,15 +1260,15 @@ BSONObj getDistinctProjection(const std::string& field) {
 StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
     OperationContext* opCtx,
     Collection* collection,
-    const CountRequest& request,
+    const CountRequestIDL& request,
     bool explain,
     PlanExecutor::YieldPolicy yieldPolicy) {
     unique_ptr<WorkingSet> ws = make_unique<WorkingSet>();
 
-    auto qr = stdx::make_unique<QueryRequest>(request.getNs());
-    qr->setFilter(request.getQuery());
-    qr->setCollation(request.getCollation());
-    qr->setHint(request.getHint());
+    auto qr = stdx::make_unique<QueryRequest>(request.getNamespace());
+    qr->setFilter(request.getQuery().value_or(BSONObj()));
+    qr->setCollation(request.getCollation().value_or(BSONObj()));
+    qr->setHint(request.getHint().value_or(BSONObj()));
     qr->setExplain(explain);
 
     const boost::intrusive_ptr<ExpressionContext> expCtx;
@@ -1295,7 +1295,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
         unique_ptr<PlanStage> root = make_unique<CountStage>(
             opCtx, collection, std::move(params), ws.get(), new EOFStage(opCtx));
         return PlanExecutor::make(
-            opCtx, std::move(ws), std::move(root), request.getNs(), yieldPolicy);
+            opCtx, std::move(ws), std::move(root), request.getNamespace(), yieldPolicy);
     }
 
     // If the query is empty, then we can determine the count by just asking the collection
@@ -1305,14 +1305,14 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorCount(
     // If there is a hint, then we can't use a trival count plan as described above.
     const bool isEmptyQueryPredicate =
         cq->root()->matchType() == MatchExpression::AND && cq->root()->numChildren() == 0;
-    const bool useRecordStoreCount = isEmptyQueryPredicate && request.getHint().isEmpty();
+    const bool useRecordStoreCount = isEmptyQueryPredicate && !request.getHint();
     CountStageParams params(request, useRecordStoreCount);
 
     if (useRecordStoreCount) {
         unique_ptr<PlanStage> root =
             make_unique<CountStage>(opCtx, collection, std::move(params), ws.get(), nullptr);
         return PlanExecutor::make(
-            opCtx, std::move(ws), std::move(root), request.getNs(), yieldPolicy);
+            opCtx, std::move(ws), std::move(root), request.getNamespace(), yieldPolicy);
     }
 
     const size_t plannerOptions = QueryPlannerParams::IS_COUNT;

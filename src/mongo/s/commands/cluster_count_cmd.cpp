@@ -25,14 +25,15 @@
  *    exception statement from all source files in the program, then also delete
  *    it in the license file.
  */
-
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kCommand
 #include "mongo/platform/basic.h"
 
 #include <vector>
 
 #include "mongo/bson/util/bson_extract.h"
 #include "mongo/db/commands.h"
-#include "mongo/db/query/count_request.h"
+#include "mongo/db/commands/count_cmd_gen.h"
+#include "mongo/db/commands/count_request.h"
 #include "mongo/db/query/view_response_formatter.h"
 #include "mongo/db/views/resolved_view.h"
 #include "mongo/rpc/get_status_from_command_result.h"
@@ -42,6 +43,7 @@
 #include "mongo/s/commands/cluster_explain.h"
 #include "mongo/s/commands/strategy.h"
 #include "mongo/s/grid.h"
+#include "mongo/util/log.h"
 #include "mongo/util/timer.h"
 
 namespace mongo {
@@ -81,76 +83,43 @@ public:
                 str::stream() << "Invalid namespace specified '" << nss.ns() << "'",
                 nss.isValid());
 
-        long long skip = 0;
+        auto parsedCount = CountRequestIDL::parse(IDLParserErrorContext("count"), opCtx, cmdObj);
 
-        if (cmdObj["skip"].isNumber()) {
-            skip = cmdObj["skip"].numberLong();
-            if (skip < 0) {
+        long long skip = 0;
+        if (parsedCount.getSkip()) {
+            if (parsedCount.getSkip().value_or(0) < 0) {
                 errmsg = "skip value is negative in count query";
                 return false;
             }
-        } else if (cmdObj["skip"].ok()) {
-            errmsg = "skip value is not a valid number";
-            return false;
+            skip = parsedCount.getSkip().value_or(0);
+            parsedCount.setSkip(0);
         }
 
-        BSONObjBuilder countCmdBuilder;
-        countCmdBuilder.append("count", nss.coll());
-
-        BSONObj filter;
-        if (cmdObj["query"].isABSONObj()) {
-            countCmdBuilder.append("query", cmdObj["query"].Obj());
-            filter = cmdObj["query"].Obj();
-        }
-
-        BSONObj collation;
-        BSONElement collationElement;
-        auto status =
-            bsonExtractTypedField(cmdObj, "collation", BSONType::Object, &collationElement);
-        if (status.isOK()) {
-            collation = collationElement.Obj();
-        } else if (status != ErrorCodes::NoSuchKey) {
-            return appendCommandStatus(result, status);
-        }
-
-        if (cmdObj["limit"].isNumber()) {
-            long long limit = cmdObj["limit"].numberLong();
-
-            // We only need to factor in the skip value when sending to the shards if we
-            // have a value for limit, otherwise, we apply it only once we have collected all
-            // counts.
-            if (limit != 0 && cmdObj["skip"].isNumber()) {
-                if (limit > 0)
+        if (parsedCount.getLimit()) {
+            long long limit = parsedCount.getLimit().value_or(0);
+            if (limit != 0) {
+                if (limit > 0) {
                     limit += skip;
-                else
+                } else {
                     limit -= skip;
+                }
             }
-
-            countCmdBuilder.append("limit", limit);
+            parsedCount.setLimit(limit);
         }
 
-        const std::initializer_list<StringData> passthroughFields = {
-            "$queryOptions", "collation", "hint", "readConcern", QueryRequest::cmdOptionMaxTimeMS,
-        };
-        for (auto name : passthroughFields) {
-            if (auto field = cmdObj[name]) {
-                countCmdBuilder.append(field);
-            }
-        }
-
-        auto countCmdObj = countCmdBuilder.done();
+        auto countCmdObj = parsedCount.toBSON(cmdObj);
 
         BSONObj viewDefinition;
-        auto swShardResponses =
-            scatterGatherVersionedTargetByRoutingTable(opCtx,
-                                                       dbname,
-                                                       nss,
-                                                       countCmdObj,
-                                                       ReadPreferenceSetting::get(opCtx),
-                                                       Shard::RetryPolicy::kIdempotent,
-                                                       filter,
-                                                       collation,
-                                                       &viewDefinition);
+        auto swShardResponses = scatterGatherVersionedTargetByRoutingTable(
+            opCtx,
+            dbname,
+            nss,
+            countCmdObj,
+            ReadPreferenceSetting::get(opCtx),
+            Shard::RetryPolicy::kIdempotent,
+            parsedCount.getQuery().value_or(BSONObj()),
+            parsedCount.getCollation().value_or(BSONObj()),
+            &viewDefinition);
 
         if (ErrorCodes::CommandOnShardedViewNotSupportedOnMongod == swShardResponses.getStatus()) {
             if (viewDefinition.isEmpty()) {
@@ -164,12 +133,9 @@ public:
 
             // Rewrite the count command as an aggregation.
 
-            auto countRequest = CountRequest::parseFromBSON(nss, cmdObj, false);
-            if (!countRequest.isOK()) {
-                return appendCommandStatus(result, countRequest.getStatus());
-            }
-
-            auto aggCmdOnView = countRequest.getValue().asAggregationCommand();
+            CountRequest countRequest = CountRequest(nss, parsedCount);
+            auto aggCmdOnView = countRequest.asAggregationCommand(cmdObj);
+            BasicCommand::appendPassthroughFields(cmdObj, aggCmdOnView.getValue());
             if (!aggCmdOnView.isOK()) {
                 return appendCommandStatus(result, aggCmdOnView.getStatus());
             }
@@ -247,22 +213,7 @@ public:
                 str::stream() << "Invalid namespace specified '" << nss.ns() << "'",
                 nss.isValid());
 
-        // Extract the targeting query.
-        BSONObj targetingQuery;
-        if (Object == cmdObj["query"].type()) {
-            targetingQuery = cmdObj["query"].Obj();
-        }
-
-        // Extract the targeting collation.
-        BSONObj targetingCollation;
-        BSONElement targetingCollationElement;
-        auto status = bsonExtractTypedField(
-            cmdObj, "collation", BSONType::Object, &targetingCollationElement);
-        if (status.isOK()) {
-            targetingCollation = targetingCollationElement.Obj();
-        } else if (status != ErrorCodes::NoSuchKey) {
-            return status;
-        }
+        auto parsedCount = CountRequestIDL::parse(IDLParserErrorContext("count"), opCtx, cmdObj);
 
         const auto explainCmd = ClusterExplain::wrapAsExplain(cmdObj, verbosity);
 
@@ -270,16 +221,16 @@ public:
         Timer timer;
 
         BSONObj viewDefinition;
-        auto swShardResponses =
-            scatterGatherVersionedTargetByRoutingTable(opCtx,
-                                                       dbname,
-                                                       nss,
-                                                       explainCmd,
-                                                       ReadPreferenceSetting::get(opCtx),
-                                                       Shard::RetryPolicy::kIdempotent,
-                                                       targetingQuery,
-                                                       targetingCollation,
-                                                       &viewDefinition);
+        auto swShardResponses = scatterGatherVersionedTargetByRoutingTable(
+            opCtx,
+            dbname,
+            nss,
+            explainCmd,
+            ReadPreferenceSetting::get(opCtx),
+            Shard::RetryPolicy::kIdempotent,
+            parsedCount.getQuery().value_or(BSONObj()),
+            parsedCount.getCollation().value_or(BSONObj()),
+            &viewDefinition);
 
         long long millisElapsed = timer.millis();
 
@@ -289,12 +240,8 @@ public:
                                   << ErrorCodes::errorString(swShardResponses.getStatus().code()),
                     !viewDefinition.isEmpty());
 
-            auto countRequest = CountRequest::parseFromBSON(nss, cmdObj, true);
-            if (!countRequest.isOK()) {
-                return countRequest.getStatus();
-            }
-
-            auto aggCmdOnView = countRequest.getValue().asAggregationCommand();
+            CountRequest countRequest = CountRequest(nss, parsedCount);
+            auto aggCmdOnView = countRequest.asAggregationCommand(cmdObj);
             if (!aggCmdOnView.isOK()) {
                 return aggCmdOnView.getStatus();
             }

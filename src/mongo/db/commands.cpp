@@ -144,7 +144,7 @@ NamespaceString Command::parseNsOrUUID(OperationContext* opCtx,
         NamespaceString nss = catalog.lookupNSSByUUID(uuid);
         uassert(ErrorCodes::NamespaceNotFound,
                 str::stream() << "UUID " << uuid << " specified in "
-                              << cmdObj.firstElement().fieldNameStringData()
+                              << first.fieldNameStringData()
                               << " command not found in "
                               << dbname
                               << " database",

@@ -493,6 +493,9 @@ env.Library(
     target="commands",
     source=[
         'commands.cpp',
+        'commands/count_request.cpp',
+        'commands/hint_parser.cpp',
+        env.Idlc('commands/count_cmd.idl')[0],
     ],
     LIBDEPS=[
         '$BUILD_DIR/mongo/base',

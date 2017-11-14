@@ -33,6 +33,8 @@
 #include "mongo/db/auth/authorization_session.h"
 #include "mongo/db/client.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/commands/count_cmd_gen.h"
+#include "mongo/db/commands/count_request.h"
 #include "mongo/db/commands/run_aggregate.h"
 #include "mongo/db/curop.h"
 #include "mongo/db/db_raii.h"
@@ -114,29 +116,34 @@ public:
                            const BSONObj& cmdObj,
                            ExplainOptions::Verbosity verbosity,
                            BSONObjBuilder* out) const {
-        const bool isExplain = true;
         Lock::DBLock dbLock(opCtx, dbname, MODE_IS);
         auto nss = parseNsOrUUID(opCtx, dbname, cmdObj);
-        auto request = CountRequest::parseFromBSON(nss, cmdObj, isExplain);
-        if (!request.isOK()) {
-            return request.getStatus();
+
+        BSONObjBuilder explainObjBuilder;
+        explainObjBuilder.appendElements(cmdObj);
+        explainObjBuilder.append("$db", dbname);
+        BSONObj explainObj = explainObjBuilder.obj();
+
+        auto parsedCount = CountRequestIDL::parse(IDLParserErrorContext("count"), opCtx, explainObj);
+        CountRequest request(nss, parsedCount);
+        if (!request.validate()) {
+            return Status(ErrorCodes::BadValue, "skip value is negative in count query");
         }
 
         // Acquire the db read lock.
-        AutoGetCollectionOrViewForReadCommand ctx(
-            opCtx, request.getValue().getNs(), std::move(dbLock));
+        AutoGetCollectionOrViewForReadCommand ctx(opCtx, request.getNs(), std::move(dbLock));
         Collection* collection = ctx.getCollection();
 
         if (ctx.getView()) {
             ctx.releaseLocksForView();
 
-            auto viewAggregation = request.getValue().asAggregationCommand();
+            auto viewAggregation = request.asAggregationCommand(cmdObj);
             if (!viewAggregation.isOK()) {
                 return viewAggregation.getStatus();
             }
 
             auto viewAggRequest = AggregationRequest::parseFromBSON(
-                request.getValue().getNs(), viewAggregation.getValue(), verbosity);
+                request.getNs(), viewAggregation.getValue(), verbosity);
             if (!viewAggRequest.isOK()) {
                 return viewAggRequest.getStatus();
             }
@@ -150,12 +157,11 @@ public:
 
         // Prevent chunks from being cleaned up during yields - this allows us to only check the
         // version on initial entry into count.
-        auto rangePreserver =
-            CollectionShardingState::get(opCtx, request.getValue().getNs())->getMetadata();
+        auto rangePreserver = CollectionShardingState::get(opCtx, request.getNs())->getMetadata();
 
         auto statusWithPlanExecutor = getExecutorCount(opCtx,
                                                        collection,
-                                                       request.getValue(),
+                                                       request.getParsedCount(),
                                                        true,  // explain
                                                        PlanExecutor::YIELD_AUTO);
         if (!statusWithPlanExecutor.isOK()) {
@@ -172,22 +178,24 @@ public:
                      const string& dbname,
                      const BSONObj& cmdObj,
                      BSONObjBuilder& result) {
-        const bool isExplain = false;
         Lock::DBLock dbLock(opCtx, dbname, MODE_IS);
         auto nss = parseNsOrUUID(opCtx, dbname, cmdObj);
-        auto request = CountRequest::parseFromBSON(nss, cmdObj, isExplain);
-        if (!request.isOK()) {
-            return appendCommandStatus(result, request.getStatus());
+
+
+        auto parsedCount = CountRequestIDL::parse(IDLParserErrorContext("count"), opCtx, cmdObj);
+        CountRequest request(nss, std::move(parsedCount));
+        if (!request.validate()) {
+            return appendCommandStatus(
+                result, Status(ErrorCodes::BadValue, "skip value is negative in count query"));
         }
 
-        AutoGetCollectionOrViewForReadCommand ctx(
-            opCtx, request.getValue().getNs(), std::move(dbLock));
+        AutoGetCollectionOrViewForReadCommand ctx(opCtx, request.getNs(), std::move(dbLock));
         Collection* collection = ctx.getCollection();
 
         if (ctx.getView()) {
             ctx.releaseLocksForView();
 
-            auto viewAggregation = request.getValue().asAggregationCommand();
+            auto viewAggregation = request.asAggregationCommand(cmdObj);
             if (!viewAggregation.isOK()) {
                 return appendCommandStatus(result, viewAggregation.getStatus());
             }
@@ -210,12 +218,11 @@ public:
 
         // Prevent chunks from being cleaned up during yields - this allows us to only check the
         // version on initial entry into count.
-        auto rangePreserver =
-            CollectionShardingState::get(opCtx, request.getValue().getNs())->getMetadata();
+        auto rangePreserver = CollectionShardingState::get(opCtx, request.getNs())->getMetadata();
 
         auto statusWithPlanExecutor = getExecutorCount(opCtx,
                                                        collection,
-                                                       request.getValue(),
+                                                       request.getParsedCount(),
                                                        false,  // !explain
                                                        PlanExecutor::YIELD_AUTO);
         if (!statusWithPlanExecutor.isOK()) {

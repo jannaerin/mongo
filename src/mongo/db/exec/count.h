@@ -29,16 +29,16 @@
 #pragma once
 
 
+#include "mongo/db/commands/count_cmd_gen.h"
 #include "mongo/db/exec/plan_stage.h"
-#include "mongo/db/query/count_request.h"
 
 namespace mongo {
 
 struct CountStageParams {
-    CountStageParams(const CountRequest& request, bool useRecordStoreCount)
-        : nss(request.getNs()),
-          limit(request.getLimit()),
-          skip(request.getSkip()),
+    CountStageParams(const CountRequestIDL& request, bool useRecordStoreCount)
+        : nss(request.getNamespace()),
+          limit(request.getLimit().value_or(0)),
+          skip(request.getSkip().value_or(0)),
           useRecordStoreCount(useRecordStoreCount) {}
 
     // Namespace to operate on (e.g. "foo.bar").

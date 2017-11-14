@@ -44,7 +44,8 @@ function checkCountScanIndexExplain(explain, startKey, endKey, startInclusive, e
 
 // Collection does not exist.
 assert.eq(0, t.count());
-var explain = db.runCommand({explain: {count: collName}, verbosity: "executionStats"});
+var explain =
+    db.runCommand({explain: {count: collName, query: {x: {$gt: 3}}}, verbosity: "executionStats"});
 checkCountExplain(explain, 0);
 
 // Collection does not exist with skip, limit, and/or query.
@@ -78,7 +79,7 @@ for (var i = 0; i < 10; i++) {
 
 // Trivial count with no skip, limit, or query.
 assert.eq(10, t.count());
-explain = db.runCommand({explain: {count: collName}, verbosity: "executionStats"});
+var explain = db.runCommand({explain: {count: collName}, verbosity: "executionStats"});
 checkCountExplain(explain, 10);
 
 // Trivial count with skip.

@@ -142,7 +142,9 @@ public:
     //  - asserts count is not trivial
     //  - asserts nCounted is equal to expected_n
     //  - asserts nSkipped is correct
-    void testCount(const CountRequest& request, int expected_n = kDocuments, bool indexed = false) {
+    void testCount(const CountRequestIDL& request,
+                   int expected_n = kDocuments,
+                   bool indexed = false) {
         setup();
         getRecordIds();
 
@@ -151,8 +153,8 @@ public:
         const CollatorInterface* collator = nullptr;
         const boost::intrusive_ptr<ExpressionContext> expCtx(
             new ExpressionContext(&_opCtx, collator));
-        StatusWithMatchExpression statusWithMatcher =
-            MatchExpressionParser::parse(request.getQuery(), expCtx);
+        BSONObj query = request.getQuery().value_or(BSONObj());
+        StatusWithMatchExpression statusWithMatcher = MatchExpressionParser::parse(query, expCtx);
         ASSERT(statusWithMatcher.isOK());
         unique_ptr<MatchExpression> expression = std::move(statusWithMatcher.getValue());
 
@@ -171,7 +173,7 @@ public:
 
         ASSERT_FALSE(stats->recordStoreCount);
         ASSERT_EQUALS(stats->nCounted, expected_n);
-        ASSERT_EQUALS(stats->nSkipped, request.getSkip());
+        ASSERT_EQUALS(stats->nSkipped, request.getSkip().value_or(0));
     }
 
     // Performs a test using a count stage whereby each unit of work is interjected
@@ -245,7 +247,8 @@ protected:
 class QueryStageCountNoChangeDuringYield : public CountStageTest {
 public:
     void run() {
-        CountRequest request(NamespaceString(ns()), BSON("x" << LT << kDocuments / 2));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << LT << kDocuments / 2));
 
         testCount(request, kDocuments / 2);
         testCount(request, kDocuments / 2, true);
@@ -255,7 +258,8 @@ public:
 class QueryStageCountYieldWithSkip : public CountStageTest {
 public:
     void run() {
-        CountRequest request(NamespaceString(ns()), BSON("x" << GTE << 0));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << GTE << 0));
         request.setSkip(2);
 
         testCount(request, kDocuments - 2);
@@ -266,7 +270,8 @@ public:
 class QueryStageCountYieldWithLimit : public CountStageTest {
 public:
     void run() {
-        CountRequest request(NamespaceString(ns()), BSON("x" << GTE << 0));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << GTE << 0));
         request.setSkip(0);
         request.setLimit(2);
 
@@ -279,7 +284,8 @@ public:
 class QueryStageCountInsertDuringYield : public CountStageTest {
 public:
     void run() {
-        CountRequest request(NamespaceString(ns()), BSON("x" << 1));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << 1));
 
         testCount(request, kInterjections + 1);
         testCount(request, kInterjections + 1, true);
@@ -296,7 +302,8 @@ public:
     void run() {
         // expected count would be 99 but we delete the second record
         // after doing the first unit of work
-        CountRequest request(NamespaceString(ns()), BSON("x" << GTE << 1));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << GTE << 1));
 
         testCount(request, kDocuments - 2);
         testCount(request, kDocuments - 2, true);
@@ -323,7 +330,8 @@ public:
     void run() {
         // expected count would be kDocuments-2 but we update the first and second records
         // after doing the first unit of work so they wind up getting counted later on
-        CountRequest request(NamespaceString(ns()), BSON("x" << GTE << 2));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << GTE << 2));
 
         testCount(request, kDocuments);
         testCount(request, kDocuments, true);
@@ -346,7 +354,9 @@ public:
 class QueryStageCountMultiKeyDuringYield : public CountStageTest {
 public:
     void run() {
-        CountRequest request(NamespaceString(ns()), BSON("x" << 1));
+        CountRequestIDL request = CountRequestIDL(NamespaceString(ns()));
+        request.setQuery(BSON("x" << 1));
+
         testCount(request, kDocuments + 1, true);  // only applies to indexed case
     }
 
