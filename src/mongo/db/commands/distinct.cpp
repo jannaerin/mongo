@@ -45,6 +45,8 @@
 #include "mongo/db/client.h"
 #include "mongo/db/clientcursor.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/commands/distinct_cmd_gen.h"
+#include "mongo/db/commands/distinct_request.h"
 #include "mongo/db/commands/run_aggregate.h"
 #include "mongo/db/db_raii.h"
 #include "mongo/db/exec/working_set_common.h"
@@ -55,7 +57,6 @@
 #include "mongo/db/query/explain.h"
 #include "mongo/db/query/find_common.h"
 #include "mongo/db/query/get_executor.h"
-#include "mongo/db/query/parsed_distinct.h"
 #include "mongo/db/query/plan_summary_stats.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/db/query/view_response_formatter.h"
@@ -119,10 +120,9 @@ public:
         const NamespaceString nss(parseNsCollectionRequired(dbname, cmdObj));
 
         const ExtensionsCallbackReal extensionsCallback(opCtx, &nss);
-        auto parsedDistinct = ParsedDistinct::parse(opCtx, nss, cmdObj, extensionsCallback, true);
-        if (!parsedDistinct.isOK()) {
-            return parsedDistinct.getStatus();
-        }
+
+        auto parsedDistinct = DistinctRequestIDL::parse(IDLParserErrorContext("distinct"), cmdObj);
+        DistinctRequest request(nss, parsedDistinct);
 
         AutoGetCollectionOrViewForReadCommand ctx(opCtx, nss);
         Collection* collection = ctx.getCollection();
@@ -130,7 +130,7 @@ public:
         if (ctx.getView()) {
             ctx.releaseLocksForView();
 
-            auto viewAggregation = parsedDistinct.getValue().asAggregationCommand();
+            auto viewAggregation = request.asAggregationCommand(cmdObj);
             if (!viewAggregation.isOK()) {
                 return viewAggregation.getStatus();
             }
@@ -145,8 +145,15 @@ public:
                 opCtx, nss, viewAggRequest.getValue(), viewAggregation.getValue(), *out);
         }
 
-        auto executor = getExecutorDistinct(
-            opCtx, collection, nss.ns(), &parsedDistinct.getValue(), PlanExecutor::YIELD_AUTO);
+
+
+        auto executor = getExecutorDistinct(opCtx,
+                                            collection,
+                                            nss.ns(),
+                                            parsedDistinct,
+                                            true,
+                                            PlanExecutor::YIELD_AUTO);
+
         if (!executor.isOK()) {
             return executor.getStatus();
         }
@@ -160,12 +167,10 @@ public:
              const BSONObj& cmdObj,
              BSONObjBuilder& result) {
         const NamespaceString nss(parseNsCollectionRequired(dbname, cmdObj));
-
         const ExtensionsCallbackReal extensionsCallback(opCtx, &nss);
-        auto parsedDistinct = ParsedDistinct::parse(opCtx, nss, cmdObj, extensionsCallback, false);
-        if (!parsedDistinct.isOK()) {
-            return appendCommandStatus(result, parsedDistinct.getStatus());
-        }
+
+        auto parsedDistinct = DistinctRequestIDL::parse(IDLParserErrorContext("distinct"), cmdObj);
+        DistinctRequest request(nss, parsedDistinct);
 
         AutoGetCollectionOrViewForReadCommand ctx(opCtx, nss);
         Collection* collection = ctx.getCollection();
@@ -173,7 +178,7 @@ public:
         if (ctx.getView()) {
             ctx.releaseLocksForView();
 
-            auto viewAggregation = parsedDistinct.getValue().asAggregationCommand();
+            auto viewAggregation = request.asAggregationCommand(cmdObj);
             if (!viewAggregation.isOK()) {
                 return appendCommandStatus(result, viewAggregation.getStatus());
             }
@@ -194,8 +199,12 @@ public:
             return true;
         }
 
-        auto executor = getExecutorDistinct(
-            opCtx, collection, nss.ns(), &parsedDistinct.getValue(), PlanExecutor::YIELD_AUTO);
+        auto executor = getExecutorDistinct(opCtx,
+                                            collection,
+                                            nss.ns(),
+                                            parsedDistinct,
+                                            false,
+                                            PlanExecutor::YIELD_AUTO);
         if (!executor.isOK()) {
             return appendCommandStatus(result, executor.getStatus());
         }
@@ -206,7 +215,7 @@ public:
                 Explain::getPlanSummary(executor.getValue().get()));
         }
 
-        string key = cmdObj[ParsedDistinct::kKeyField].valuestrsafe();
+        string key = parsedDistinct.getKey().toString();
 
         int bufSize = BSONObjMaxUserSize - 4096;
         BufBuilder bb(bufSize);

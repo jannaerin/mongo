@@ -1467,14 +1467,38 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
     OperationContext* opCtx,
     Collection* collection,
     const std::string& ns,
-    ParsedDistinct* parsedDistinct,
+    DistinctRequestIDL& parsedDistinct,
+    bool isExplain,
     PlanExecutor::YieldPolicy yieldPolicy) {
+
+    auto qr = stdx::make_unique<QueryRequest>(parsedDistinct.getNamespace());
+    qr->setFilter(parsedDistinct.getQuery().value_or(BSONObj()));
+    qr->setCollation(parsedDistinct.getCollation().value_or(BSONObj()));
+    if (parsedDistinct.getComment()) {
+        qr->setComment(parsedDistinct.getComment()->toString());
+    }
+    qr->setExplain(isExplain);
+
+    const boost::intrusive_ptr<ExpressionContext> expCtx;
     if (!collection) {
         // Treat collections that do not exist as empty collections.
+        auto statusWithCQ =
+            CanonicalQuery::canonicalize(opCtx,
+                                         std::move(qr),
+                                         expCtx,
+                                         ExtensionsCallbackNoop(),
+                                         MatchExpressionParser::kAllowAllSpecialFeatures &
+                                             ~MatchExpressionParser::AllowedFeatures::kIsolated);
+        if (!statusWithCQ.isOK()) {
+            return statusWithCQ.getStatus();
+        }
+
+        unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+
         return PlanExecutor::make(opCtx,
                                   make_unique<WorkingSet>(),
                                   make_unique<EOFStage>(opCtx),
-                                  parsedDistinct->releaseQuery(),
+                                  std::move(cq),
                                   collection,
                                   yieldPolicy);
     }
@@ -1497,7 +1521,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
     while (ii.more()) {
         const IndexDescriptor* desc = ii.next();
         IndexCatalogEntry* ice = ii.catalogEntry(desc);
-        if (desc->keyPattern().hasField(parsedDistinct->getKey())) {
+        if (desc->keyPattern().hasField(parsedDistinct.getKey().toString())) {
             plannerParams.indices.push_back(IndexEntry(desc->keyPattern(),
                                                        desc->getAccessMethodName(),
                                                        desc->isMultikey(opCtx),
@@ -1510,13 +1534,25 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
                                                        ice->getCollator()));
         }
     }
-
     const ExtensionsCallbackReal extensionsCallback(opCtx, &collection->ns());
 
     // If there are no suitable indices for the distinct hack bail out now into regular planning
     // with no projection.
     if (plannerParams.indices.empty()) {
-        return getExecutor(opCtx, collection, parsedDistinct->releaseQuery(), yieldPolicy);
+            auto statusWithCQ =
+            CanonicalQuery::canonicalize(opCtx,
+                                         std::move(qr),
+                                         expCtx,
+                                         extensionsCallback,
+                                         MatchExpressionParser::kAllowAllSpecialFeatures &
+                                             ~MatchExpressionParser::AllowedFeatures::kIsolated);
+        if (!statusWithCQ.isOK()) {
+            return statusWithCQ.getStatus();
+        }
+        
+        unique_ptr<CanonicalQuery> cq = std::move(statusWithCQ.getValue());
+
+        return getExecutor(opCtx, collection, std::move(cq), yieldPolicy);
     }
 
     //
@@ -1526,12 +1562,9 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
     // Applying a projection allows the planner to try to give us covered plans that we can turn
     // into the projection hack.  getDistinctProjection deals with .find() projection semantics
     // (ie _id:1 being implied by default).
-    BSONObj projection = getDistinctProjection(parsedDistinct->getKey());
-
-    auto qr = stdx::make_unique<QueryRequest>(parsedDistinct->getQuery()->getQueryRequest());
+    BSONObj projection = getDistinctProjection(parsedDistinct.getKey().toString());
     qr->setProj(projection);
 
-    const boost::intrusive_ptr<ExpressionContext> expCtx;
     auto statusWithCQ =
         CanonicalQuery::canonicalize(opCtx,
                                      std::move(qr),
@@ -1555,11 +1588,8 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
     // Not every index in plannerParams.indices may be suitable. Refer to
     // getDistinctNodeIndex().
     size_t distinctNodeIndex = 0;
-    if (parsedDistinct->getQuery()->getQueryRequest().getFilter().isEmpty() &&
-        getDistinctNodeIndex(plannerParams.indices,
-                             parsedDistinct->getKey(),
-                             cq->getCollator(),
-                             &distinctNodeIndex)) {
+    if (!parsedDistinct.getQuery() &&
+        getDistinctNodeIndex(plannerParams.indices, parsedDistinct.getKey().toString(), cq->getCollator(), &distinctNodeIndex)) {
         auto dn = stdx::make_unique<DistinctNode>(plannerParams.indices[distinctNodeIndex]);
         dn->direction = 1;
         IndexBoundsBuilder::allValuesBounds(dn->index.keyPattern, &dn->bounds);
@@ -1607,7 +1637,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
 
     // We look for a solution that has an ixscan we can turn into a distinctixscan
     for (size_t i = 0; i < solutions.size(); ++i) {
-        if (turnIxscanIntoDistinctIxscan(solutions[i], parsedDistinct->getKey())) {
+        if (turnIxscanIntoDistinctIxscan(solutions[i], parsedDistinct.getKey().toString())) {
             // Great, we can use solutions[i].  Clean up the other QuerySolution(s).
             for (size_t j = 0; j < solutions.size(); ++j) {
                 if (j != i) {
@@ -1643,7 +1673,7 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorDistinct(
         delete solutions[i];
     }
 
-    return getExecutor(opCtx, collection, parsedDistinct->releaseQuery(), yieldPolicy);
+    return getExecutor(opCtx, collection, std::move(cq), yieldPolicy);
 }
 
 }  // namespace mongo

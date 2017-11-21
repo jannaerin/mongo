@@ -139,6 +139,8 @@ public:
                                   << " but got "
                                   << innerDb.checkAndGetStringData(),
                     innerDb.checkAndGetStringData() == dbname);
+        } else {
+            explainObj = explainObj.addField(cmdObj.getField("$db"));
         }
 
         Command* commToExplain = Command::findCommand(explainObj.firstElementFieldName());

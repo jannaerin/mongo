@@ -100,7 +100,6 @@ env.Library(
     source=[
         "collation/collator_factory_icu_decoration.cpp",
         "find_common.cpp",
-        "parsed_distinct.cpp",
     ],
     LIBDEPS=[
         "$BUILD_DIR/mongo/base",
@@ -130,19 +129,6 @@ env.CppUnitTest(
     ],
     LIBDEPS=[
         "explain_options",
-    ],
-)
-
-env.CppUnitTest(
-    target="parsed_distinct_test",
-    source=[
-        "parsed_distinct_test.cpp",
-    ],
-    LIBDEPS=[
-        "$BUILD_DIR/mongo/db/pipeline/aggregation_request",
-        '$BUILD_DIR/mongo/db/service_context_noop_init',
-        "query_test_service_context",
-        "query_common",
     ],
 )
 

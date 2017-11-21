@@ -47,7 +47,8 @@
 #include "mongo/db/matcher/extensions_callback_noop.h"
 #include "mongo/db/operation_context.h"
 #include "mongo/db/query/collation/collator_factory_interface.h"
-#include "mongo/db/query/parsed_distinct.h"
+#include "mongo/db/commands/distinct_cmd_gen.h"
+#include "mongo/db/commands/distinct_request.h"
 #include "mongo/db/query/view_response_formatter.h"
 #include "mongo/db/views/resolved_view.h"
 #include "mongo/executor/task_executor_pool.h"
@@ -1084,19 +1085,12 @@ public:
              BSONObjBuilder& result) override {
         const NamespaceString nss(parseNsCollectionRequired(dbName, cmdObj));
 
-        auto query = getQuery(cmdObj);
+        auto parsedDistinct = DistinctRequestIDL::parse(IDLParserErrorContext("distinct"), cmdObj);
 
-        auto swCollation = getCollation(cmdObj);
-        if (!swCollation.isOK()) {
-            return appendEmptyResultSet(result, swCollation.getStatus(), nss.ns());
-        }
-        auto collation = std::move(swCollation.getValue());
-
-        // Construct collator for deduping.
         std::unique_ptr<CollatorInterface> collator;
-        if (!collation.isEmpty()) {
+        if (parsedDistinct.getCollation()) {
             auto swCollator =
-                CollatorFactoryInterface::get(opCtx->getServiceContext())->makeFromBSON(collation);
+                CollatorFactoryInterface::get(opCtx->getServiceContext())->makeFromBSON(parsedDistinct.getCollation().value_or(BSONObj()));
             if (!swCollator.isOK()) {
                 return appendEmptyResultSet(result, swCollator.getStatus(), nss.ns());
             }
@@ -1117,8 +1111,8 @@ public:
                                                        filterCommandRequestForPassthrough(cmdObj),
                                                        ReadPreferenceSetting::get(opCtx),
                                                        Shard::RetryPolicy::kIdempotent,
-                                                       query,
-                                                       collation,
+                                                       parsedDistinct.getQuery().value_or(BSONObj()),
+                                                       parsedDistinct.getCollation().value_or(BSONObj()),
                                                        &viewDefinition);
 
         if (ErrorCodes::CommandOnShardedViewNotSupportedOnMongod == swShardResponses.getStatus()) {
@@ -1128,13 +1122,9 @@ public:
                     !viewDefinition.isEmpty());
 
             auto resolvedView = ResolvedView::fromBSON(viewDefinition);
-            auto parsedDistinct = ParsedDistinct::parse(
-                opCtx, resolvedView.getNamespace(), cmdObj, ExtensionsCallbackNoop(), true);
-            if (!parsedDistinct.isOK()) {
-                return appendCommandStatus(result, parsedDistinct.getStatus());
-            }
 
-            auto aggCmdOnView = parsedDistinct.getValue().asAggregationCommand();
+            DistinctRequest distinctRequest = DistinctRequest(nss, parsedDistinct);
+            auto aggCmdOnView = distinctRequest.asAggregationCommand(cmdObj);
             if (!aggCmdOnView.isOK()) {
                 return appendCommandStatus(result, aggCmdOnView.getStatus());
             }
@@ -1165,7 +1155,7 @@ public:
         BSONObjComparator bsonCmp(
             BSONObj(),
             BSONObjComparator::FieldNamesMode::kConsider,
-            !collation.isEmpty()
+            parsedDistinct.getCollation()
                 ? collator.get()
                 : (routingInfo.cm() ? routingInfo.cm()->getDefaultCollator() : nullptr));
         BSONObjSet all = bsonCmp.makeBSONObjSet();
@@ -1203,24 +1193,7 @@ public:
                    BSONObjBuilder* out) const {
         const NamespaceString nss(parseNsCollectionRequired(dbname, cmdObj));
 
-        // Extract the targeting query.
-        BSONObj targetingQuery;
-        if (BSONElement queryElt = cmdObj["query"]) {
-            if (queryElt.type() == BSONType::Object) {
-                targetingQuery = queryElt.embeddedObject();
-            } else if (queryElt.type() != BSONType::jstNULL) {
-                return Status(ErrorCodes::TypeMismatch,
-                              str::stream() << "\"query\" had the wrong type. Expected "
-                                            << typeName(BSONType::Object)
-                                            << " or "
-                                            << typeName(BSONType::jstNULL)
-                                            << ", found "
-                                            << typeName(queryElt.type()));
-            }
-        }
-
-        // Extract the targeting collation.
-        auto targetingCollation = uassertStatusOK(getCollation(cmdObj));
+        auto parsedDistinct = DistinctRequestIDL::parse(IDLParserErrorContext("distinct"), cmdObj);
 
         const auto explainCmd = ClusterExplain::wrapAsExplain(cmdObj, verbosity);
 
@@ -1235,8 +1208,8 @@ public:
                                                        explainCmd,
                                                        ReadPreferenceSetting::get(opCtx),
                                                        Shard::RetryPolicy::kIdempotent,
-                                                       targetingQuery,
-                                                       targetingCollation,
+                                                       parsedDistinct.getQuery().value_or(BSONObj()),
+                                                       parsedDistinct.getCollation().value_or(BSONObj()),
                                                        &viewDefinition);
 
         long long millisElapsed = timer.millis();
@@ -1248,13 +1221,9 @@ public:
                     !viewDefinition.isEmpty());
 
             auto resolvedView = ResolvedView::fromBSON(viewDefinition);
-            auto parsedDistinct = ParsedDistinct::parse(
-                opCtx, resolvedView.getNamespace(), cmdObj, ExtensionsCallbackNoop(), true);
-            if (!parsedDistinct.isOK()) {
-                return parsedDistinct.getStatus();
-            }
 
-            auto aggCmdOnView = parsedDistinct.getValue().asAggregationCommand();
+            DistinctRequest distinctRequest = DistinctRequest(nss, parsedDistinct);
+            auto aggCmdOnView = distinctRequest.asAggregationCommand(cmdObj);
             if (!aggCmdOnView.isOK()) {
                 return aggCmdOnView.getStatus();
             }
