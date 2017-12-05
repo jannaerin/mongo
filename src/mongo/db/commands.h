@@ -252,6 +252,11 @@ public:
     // The first field is interpreted as a collection name.
     static NamespaceString parseNsCollectionRequired(const std::string& dbname,
                                                      const BSONObj& cmdObj);
+    static NamespaceString parseNsCollectionRequired(const std::string& dbname,
+                                                     const BSONElement& firstElement);
+    static NamespaceString parseNsOrUUID(OperationContext* opCtx,
+                                         const std::string& dbname,
+                                         const BSONElement& firstElement);
     static NamespaceString parseNsOrUUID(OperationContext* opCtx,
                                          const std::string& dbname,
                                          const BSONObj& cmdObj);

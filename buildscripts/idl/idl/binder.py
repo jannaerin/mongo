@@ -304,7 +304,7 @@ def _inject_hidden_command_fields(command):
     db_field.serialize_op_msg_request_only = True
 
     # Commands that require namespaces do not need to have db defaulted in the constructor
-    if command.namespace == common.COMMAND_NAMESPACE_CONCATENATE_WITH_DB:
+    if command.namespace == common.COMMAND_NAMESPACE_CONCATENATE_WITH_DB or command.namespace == common.COMMAND_NAMESPACE_CONCATENATE_WITH_UUID:
         db_field.constructed = True
 
     command.fields.append(db_field)

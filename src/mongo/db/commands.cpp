@@ -124,6 +124,12 @@ NamespaceString Command::parseNsCollectionRequired(const string& dbname, const B
     // Accepts both BSON String and Symbol for collection name per SERVER-16260
     // TODO(kangas) remove Symbol support in MongoDB 3.0 after Ruby driver audit
     BSONElement first = cmdObj.firstElement();
+    return parseNsCollectionRequired(dbname, first);
+}
+
+NamespaceString Command::parseNsCollectionRequired(const string& dbname, const BSONElement& first) {
+    // Accepts both BSON String and Symbol for collection name per SERVER-16260
+    // TODO(kangas) remove Symbol support in MongoDB 3.0 after Ruby driver audit
     uassert(ErrorCodes::InvalidNamespace,
             str::stream() << "collection name has invalid type " << typeName(first.type()),
             first.canonicalType() == canonicalizeBSONType(mongo::String));
@@ -138,6 +144,12 @@ NamespaceString Command::parseNsOrUUID(OperationContext* opCtx,
                                        const string& dbname,
                                        const BSONObj& cmdObj) {
     BSONElement first = cmdObj.firstElement();
+    return parseNsOrUUID(opCtx, dbname, first);
+}
+
+NamespaceString Command::parseNsOrUUID(OperationContext* opCtx,
+                                       const string& dbname,
+                                       const BSONElement& first) {
     if (first.type() == BinData && first.binDataType() == BinDataType::newUUID) {
         UUIDCatalog& catalog = UUIDCatalog::get(opCtx);
         UUID uuid = uassertStatusOK(UUID::parse(first));
@@ -153,7 +165,7 @@ NamespaceString Command::parseNsOrUUID(OperationContext* opCtx,
         return nss;
     } else {
         // Ensure collection identifier is not a Command
-        const NamespaceString nss(parseNsCollectionRequired(dbname, cmdObj));
+        const NamespaceString nss(parseNsCollectionRequired(dbname, first));
         uassert(ErrorCodes::InvalidNamespace,
                 str::stream() << "Invalid collection name specified '" << nss.ns() << "'",
                 nss.isNormal());

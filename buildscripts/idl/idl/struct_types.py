@@ -420,6 +420,99 @@ class _CommandWithNamespaceTypeInfo(_CommandBaseTypeInfo):
                                    (db_name, element))
 
 
+class _CommandWithNamespaceUUIDTypeInfo(_CommandWithNamespaceTypeInfo):
+    """Class for command code generation."""
+
+    def __init__(self, command):
+        # type: (ast.Command) -> None
+        """Create a _CommandWithNamespaceUUIDTypeInfo instance."""
+        self._command = command
+
+        super(_CommandWithNamespaceUUIDTypeInfo, self).__init__(command)
+
+    def get_constructor_method(self):
+        # type: () -> MethodInfo
+        class_name = common.title_case(self._struct.name)
+        return MethodInfo(class_name, class_name, ['const NamespaceString nss'], explicit=True)
+
+    def get_serializer_method(self):
+        # type: () -> MethodInfo
+        return MethodInfo(
+            common.title_case(self._struct.name),
+            'serialize', ['const BSONObj& commandPassthroughFields', 'BSONObjBuilder* builder'],
+            'void',
+            const=True)
+
+    def get_to_bson_method(self):
+        # type: () -> MethodInfo
+        return MethodInfo(
+            common.title_case(self._struct.name),
+            'toBSON', ['const BSONObj& commandPassthroughFields'],
+            'BSONObj',
+            const=True)
+
+    def get_deserializer_static_method(self):
+        # type: () -> MethodInfo
+        class_name = common.title_case(self._struct.name)
+        return MethodInfo(
+            class_name,
+            'parse', [
+                'const IDLParserErrorContext& ctxt', 'OperationContext* opCtx',
+                'const BSONObj& bsonObject'
+            ],
+            class_name,
+            static=True)
+
+    def get_op_msg_request_deserializer_static_method(self):
+        # type: () -> Optional[MethodInfo]
+        class_name = common.title_case(self._struct.name)
+        return MethodInfo(
+            class_name,
+            'parse', [
+                'const IDLParserErrorContext& ctxt', 'OperationContext* opCtx',
+                'const OpMsgRequest& request'
+            ],
+            class_name,
+            static=True)
+
+    def get_op_msg_request_deserializer_method(self):
+        # type: () -> Optional[MethodInfo]
+        return MethodInfo(
+            common.title_case(self._struct.name), 'parseProtected', [
+                'const IDLParserErrorContext& ctxt', 'OperationContext* opCtx',
+                'const OpMsgRequest& request'
+            ], 'void')
+
+    def get_deserializer_method(self):
+        # type: () -> MethodInfo
+        return MethodInfo(
+            common.title_case(self._struct.name), 'parseProtected', [
+                'const IDLParserErrorContext& ctxt', 'OperationContext* opCtx',
+                'const BSONObj& bsonObject'
+            ], 'void')
+
+    def gen_getter_method(self, indented_writer):
+        # type: (writer.IndentedTextWriter) -> None
+        indented_writer.write_line('const NamespaceString& getNamespace() const { return _nss; }')
+
+    def gen_member(self, indented_writer):
+        # type: (writer.IndentedTextWriter) -> None
+        indented_writer.write_line('NamespaceString _nss;')
+
+    def gen_serializer(self, indented_writer):
+        # type: (writer.IndentedTextWriter) -> None
+        indented_writer.write_line('invariant(!_nss.isEmpty());')
+        indented_writer.write_line('builder->append("%s", _nss.coll());' % (self._command.name))
+        indented_writer.write_empty_line()
+
+    def gen_namespace_check(self, indented_writer, db_name, element):
+        # type: (writer.IndentedTextWriter, unicode, unicode) -> None
+        # TODO: should the name of the first element be validated??
+        indented_writer.write_line('invariant(_nss.isEmpty());')
+        indented_writer.write_line('_nss = Command::parseNsOrUUID(opCtx, %s, %s);' %
+                                   (db_name, element))
+
+
 def get_struct_info(struct):
     # type: (ast.Struct) -> StructTypeInfoBase
     """Get type information about the struct or command to generate C++ code."""
@@ -427,6 +520,9 @@ def get_struct_info(struct):
     if isinstance(struct, ast.Command):
         if struct.namespace == common.COMMAND_NAMESPACE_IGNORED:
             return _IgnoredCommandTypeInfo(struct)
-        return _CommandWithNamespaceTypeInfo(struct)
+        elif struct.namespace == common.COMMAND_NAMESPACE_CONCATENATE_WITH_UUID:
+            return _CommandWithNamespaceUUIDTypeInfo(struct)
+        else:
+            return _CommandWithNamespaceTypeInfo(struct)
 
     return _StructTypeInfo(struct)

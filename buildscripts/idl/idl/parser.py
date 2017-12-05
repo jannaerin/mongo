@@ -415,7 +415,8 @@ def _parse_command(ctxt, spec, name, node):
 
     # TODO: support the first argument as UUID depending on outcome of Catalog Versioning changes.
     valid_commands = [
-        common.COMMAND_NAMESPACE_CONCATENATE_WITH_DB, common.COMMAND_NAMESPACE_IGNORED
+        common.COMMAND_NAMESPACE_CONCATENATE_WITH_DB,
+        common.COMMAND_NAMESPACE_CONCATENATE_WITH_UUID, common.COMMAND_NAMESPACE_IGNORED
     ]
     if command.namespace and command.namespace not in valid_commands:
         ctxt.add_bad_command_namespace_error(command, command.name, command.namespace,
