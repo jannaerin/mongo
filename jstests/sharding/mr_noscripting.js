@@ -22,7 +22,7 @@ var reduce = function(key, values) {
 };
 
 var mrResult = testDB.runCommand({mapreduce: 'bar', map: map, reduce: reduce, out: {inline: 1}});
-
+jsTest.log("fffffff "+ tojson(mrResult));
 assert.eq(0, mrResult.ok, 'mr result: ' + tojson(mrResult));
 
 // Confirm that mongos did not crash

@@ -14,7 +14,7 @@
     var adminUser = {db: "admin", username: "foo", password: "bar"};
 
     // set up a 2 shard cluster with keyfile
-    var st = new ShardingTest({shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1'}});
+    var st = new ShardingTest({shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     var mongos = st.s0;
     var admin = mongos.getDB("admin");
@@ -57,7 +57,7 @@
 
     // enable sharding on a collection
     assert.commandWorked(admin.runCommand({enableSharding: "" + collA.getDB()}));
-    st.ensurePrimaryShard("foo", "shard0000");
+    st.ensurePrimaryShard("foo", st.shard0.shardName);
 
     assert.commandWorked(admin.runCommand({shardCollection: "" + collA, key: {_id: 1}}));
 
@@ -68,7 +68,8 @@
     }
 
     // move a chunk
-    assert.commandWorked(admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: "shard0001"}));
+    assert.commandWorked(
+        admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: conn.name}));
 
     // verify the chunk was moved
     admin.runCommand({flushRouterConfig: 1});

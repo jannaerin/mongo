@@ -44,7 +44,7 @@ var sharded = new ShardingTest({shards: 3, mongos: 1});
 sharded.stopBalancer();
 sharded.adminCommand({enablesharding: "test"});
 var shardedDB = sharded.getDB('test');
-sharded.ensurePrimaryShard('test', 'shard0001');
+sharded.ensurePrimaryShard('test', sharded.shard1.shardName);
 printjson(shardedDB);
 
 test(sharded, shardedDB, true, '2dsphere');

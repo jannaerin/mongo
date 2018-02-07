@@ -11,18 +11,18 @@
     var test = new GeoNearRandomTest(testName);
 
     s.adminCommand({enablesharding: 'test'});
-    s.ensurePrimaryShard('test', 'shard0001');
+    s.ensurePrimaryShard('test', s.shard1.shardName);
     s.adminCommand({shardcollection: ('test.' + testName), key: {_id: 1}});
 
     test.insertPts(50);
-
+    var shardList = [s.shard0.shardName, s.shard1.shardName, s.shard2.shardName];
     for (var i = (test.nPts / 10); i < test.nPts; i += (test.nPts / 10)) {
         s.adminCommand({split: ('test.' + testName), middle: {_id: i}});
         try {
             s.adminCommand({
                 moveChunk: ('test.' + testName),
                 find: {_id: i - 1},
-                to: ('shard000' + (i % 3)),
+                to: (shardList[i % 3]),
                 _waitForDelete: true
             });
         } catch (e) {

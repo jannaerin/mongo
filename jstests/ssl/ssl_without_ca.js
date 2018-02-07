@@ -47,6 +47,6 @@ assert.throws(function() {
         shards: 1,
         mongos: 1,
         verbose: 2,
-        other: {configOptions: sslParams, mongosOptions: sslParams, shardOptions: sslParams}
+        other: {configOptions: sslParams, mongosOptions: sslParams, shardOptions: sslParams, shardAsReplicaSet: false}
     });
 }, [], "mongos started with x509 clusterAuthMode but no CA file");

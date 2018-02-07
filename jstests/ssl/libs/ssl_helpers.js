@@ -113,7 +113,8 @@ function mixedShardTest(options1, options2, shouldSucceed) {
             mongos: [options1],
             config: [options1],
             shards: [options1, options2],
-            other: {enableBalancer: true}
+            other: {enableBalancer: true,
+            shardAsReplicaSet: false}
         });
 
         // Create admin user in case the options include auth
@@ -131,8 +132,8 @@ function mixedShardTest(options1, options2, shouldSucceed) {
         var r = st.adminCommand({enableSharding: "test"});
         assert.eq(r, true, "error enabling sharding for this configuration");
 
-        st.ensurePrimaryShard("test", "shard0000");
-        r = st.adminCommand({movePrimary: 'test', to: 'shard0001'});
+        st.ensurePrimaryShard("test", st.shard0.shardName);
+        r = st.adminCommand({movePrimary: 'test', to: st.shard1.shardName});
         assert.eq(r, true, "error movePrimary failed for this configuration");
 
         var db1 = st.getDB("test");
@@ -150,7 +151,8 @@ function mixedShardTest(options1, options2, shouldSucceed) {
         assert.eq(128, db1.col.count(), "error retrieving documents from cluster");
 
         // Test shards talking to each other
-        r = st.getDB('test').adminCommand({moveChunk: 'test.col', find: {_id: 0}, to: 'shard0000'});
+        r = st.getDB('test').adminCommand(
+            {moveChunk: 'test.col', find: {_id: 0}, to: st.shard0.shardName});
         assert(r.ok, "error moving chunks: " + tojson(r));
 
         db1.col.remove({});

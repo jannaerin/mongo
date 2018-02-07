@@ -51,6 +51,10 @@ assert.eq(9, coll.find().itcount());
 
 jsTest.log("Starting migration...");
 
+jsTest.log("ddddddd shards "+ tojson(shards));
+jsTest.log("same as??? "+ st.shard0.shardName + "  " + st.shard1.shardName);
+
+
 assert(admin.runCommand({moveChunk: coll + "", find: {_id: 0}, to: shards[1]._id}).ok);
 assert(admin.runCommand({moveChunk: coll + "", find: {_id: -1}, to: shards[1]._id}).ok);
 

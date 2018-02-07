@@ -75,7 +75,7 @@
 
     function Sharding() {
         this.st = new ShardingTest(
-            {shards: 1, config: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1'}});
+            {shards: 1, config: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
     }
 
     Sharding.prototype.stop = function() {

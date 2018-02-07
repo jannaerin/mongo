@@ -14,9 +14,11 @@
     var db = s.getDB("test");
     var admin = s.getDB("admin");
     var config = s.getDB("config");
+    let shard0Name = s.shard0.shardName;
+    let shard1Name = s.shard0.shardName;
 
     assert.commandWorked(s.s0.adminCommand({enablesharding: "test"}));
-    s.ensurePrimaryShard('test', 'shard0001');
+    s.ensurePrimaryShard('test', shard1Name);
 
     //******************Part 1********************
 
@@ -106,7 +108,10 @@
         _waitForDelete: true
     }));
 
-    var expectedShardCount = {shard0000: 0, shard0001: 0};
+    var expectedShardCount = {};
+    expectedShardCount[shard0Name] = 0;
+    expectedShardCount[shard1Name] = 0;
+    
     config.chunks.find({ns: 'test.user'}).forEach(function(chunkDoc) {
         var min = chunkDoc.min.num;
         var max = chunkDoc.max.num;
@@ -124,13 +129,13 @@
         }
     });
 
-    assert.eq(expectedShardCount['shard0000'], s.shard0.getDB('test').user.find().count());
-    assert.eq(expectedShardCount['shard0001'], s.shard1.getDB('test').user.find().count());
+    assert.eq(expectedShardCount[shard0Name], s.shard0.getDB('test').user.find().count());
+    assert.eq(expectedShardCount[shard1Name], s.shard1.getDB('test').user.find().count());
 
     assert.commandWorked(admin.runCommand({split: 'test.user', middle: {num: 70}}));
 
-    assert.eq(expectedShardCount['shard0000'], s.shard0.getDB('test').user.find().count());
-    assert.eq(expectedShardCount['shard0001'], s.shard1.getDB('test').user.find().count());
+    assert.eq(expectedShardCount[shard0Name], s.shard0.getDB('test').user.find().count());
+    assert.eq(expectedShardCount[shard1Name], s.shard1.getDB('test').user.find().count());
 
     //******************Part 3********************
 
@@ -141,9 +146,8 @@
         // setup new collection on shard0
         var coll2 = db.foo2;
         coll2.drop();
-        if (s.getPrimaryShardIdForDatabase(coll2.getDB()) != s.shard0.shardName) {
-            var moveRes =
-                admin.runCommand({movePrimary: coll2.getDB() + "", to: s.shard0.shardName});
+        if (s.getPrimaryShardIdForDatabase(coll2.getDB()) != shard0Name) {
+            var moveRes = admin.runCommand({movePrimary: coll2.getDB() + "", to: shard0Name});
             assert.eq(moveRes.ok, 1, "primary not moved correctly");
         }
 
@@ -176,7 +180,7 @@
 
         // movechunk should move ALL docs since they have same value for skey
         moveRes = admin.runCommand(
-            {moveChunk: coll2 + "", find: {skey: 0}, to: s.shard1.shardName, _waitForDelete: true});
+            {moveChunk: coll2 + "", find: {skey: 0}, to: shard1Name, _waitForDelete: true});
         assert.eq(moveRes.ok, 1, "movechunk didn't work");
 
         // Make sure our migration eventually goes through before testing individual shards

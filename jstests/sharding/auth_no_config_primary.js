@@ -14,7 +14,7 @@ TestData.skipCheckDBHashes = true;
 (function() {
     'use strict';
 
-    var st = new ShardingTest({shards: 1, other: {keyFile: 'jstests/libs/key1'}});
+    var st = new ShardingTest({shards: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     st.s.getDB('admin').createUser({user: 'root', pwd: 'pass', roles: ['root']});
     st.s.getDB('admin').auth('root', 'pass');

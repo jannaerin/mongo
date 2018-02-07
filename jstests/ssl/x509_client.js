@@ -101,6 +101,7 @@ var st = new ShardingTest({
         mongosOptions: x509_options,
         shardOptions: x509_options,
         useHostname: false,
+        shardAsReplicaSet: false
     }
 });
 

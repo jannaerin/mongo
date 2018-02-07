@@ -52,7 +52,7 @@
     MongoRunner.stopMongod(mongod);
 
     const st =
-        new ShardingTest({shards: 1, mongos: 1, config: 1, other: {keyFile: 'jstests/libs/key1'}});
+        new ShardingTest({shards: 1, mongos: 1, config: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     // Ensure that the sessions collection exists.
     st.c0.getDB("admin").runCommand({refreshLogicalSessionCacheNow: 1});

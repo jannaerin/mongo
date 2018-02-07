@@ -34,7 +34,7 @@
         mongos: 1,
         manualAddShard: true,
         mongosWaitsForKeys: true,
-        other: {keyFile: "jstests/libs/key1"}
+        other: {keyFile: "jstests/libs/key1", shardAsReplicaSet: false}
     });
 
     // Create admin user and authenticate as them.

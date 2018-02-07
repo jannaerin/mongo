@@ -45,7 +45,7 @@
     MongoRunner.stopMongod(mongod);
 
     const st =
-        new ShardingTest({shards: 1, mongos: 1, config: 1, other: {keyFile: 'jstests/libs/key1'}});
+        new ShardingTest({shards: 1, mongos: 1, config: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
     runListAllLocalSessionsTest(st.s0);
     st.stop();
 })();
