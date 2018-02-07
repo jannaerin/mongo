@@ -10,10 +10,15 @@ var st = new ShardingTest({
 load("jstests/sharding/movechunk_include.js");
 setupMoveChunkTest(st);
 
-var shards = [st.shard0, st.shard1];
+var shards = [st.rs0.getPrimary(), st.rs1.getPrimary()];
 var foundMoveChunk = false;
 for (i in shards) {
     var dbpath = shards[i].adminCommand("getCmdLineOpts").parsed.storage.dbPath;
+    jsTest.log("ccccccc db path "+ dbpath);
+    jsTest.log(ls(dbpath)
+            .filter(function(a) {
+                return null != a.match("moveChunk");
+            }));
     var hasMoveChunkDir = 0 !=
         ls(dbpath)
             .filter(function(a) {

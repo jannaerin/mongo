@@ -17,7 +17,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     'use strict';
 
     var st = new ShardingTest(
-        {shards: 2, other: {keyFile: 'jstests/libs/key1', useHostname: true, chunkSize: 1}});
+        {shards: 2, other: {keyFile: 'jstests/libs/key1', useHostname: true, chunkSize: 1, shardAsReplicaSet: false}});
 
     var mongos = st.s;
     var adminDB = mongos.getDB('admin');
@@ -28,7 +28,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     adminDB.auth('admin', 'password');
 
     adminDB.runCommand({enableSharding: "test"});
-    st.ensurePrimaryShard('test', 'shard0001');
+    st.ensurePrimaryShard('test', st.shard1.shardName);
     adminDB.runCommand({shardCollection: "test.foo", key: {x: 1}});
 
     for (var i = 0; i < 100; i++) {

@@ -49,7 +49,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     assert.eq(nDocs, findRes.cursor.firstBatch.length);
 
     jsTest.log("Stopping " + st.shard0.shardName);
-    MongoRunner.stopMongod(st.shard0);
+    st.rs0.stopSet();
 
     jsTest.log("Without 'allowPartialResults', if some shard down, find fails.");
     assert.commandFailed(coll.runCommand({find: collName}));

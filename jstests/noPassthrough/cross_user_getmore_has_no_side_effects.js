@@ -2,7 +2,7 @@
 // getMore will leave the cursor unaffected, so that a subsequent getMore by the original author
 // will work.
 (function() {
-    const st = new ShardingTest({shards: 2, config: 1, other: {keyFile: "jstests/libs/key1"}});
+    const st = new ShardingTest({shards: 2, config: 1, other: {keyFile: "jstests/libs/key1", shardAsReplicaSet: false}});
     const kDBName = "test";
     const adminDB = st.s.getDB('admin');
     const testDB = st.s.getDB(kDBName);

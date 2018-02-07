@@ -17,10 +17,12 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
      * Restarts the mongod backing the specified shard instance, without restarting the mongobridge.
      */
     function restartShard(shard, waitForConnect) {
-        MongoRunner.stopMongod(shard);
+        //MongoRunner.stopMongod(shard);
+        shard.stopSet();
         shard.restart = true;
         shard.waitForConnect = waitForConnect;
-        MongoRunner.runMongod(shard);
+        //MongoRunner.runMongod(shard);
+        shard.start();
     }
 
     var st = new ShardingTest({shards: 2});
@@ -32,12 +34,12 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     }
 
     assert.commandWorked(st.s0.adminCommand({enableSharding: 'test'}));
-    st.ensurePrimaryShard('test', 'shard0000');
+    st.ensurePrimaryShard('test', st.shard0.shardName);
 
     assert.commandWorked(st.s0.adminCommand({shardCollection: 'test.foo', key: {_id: 1}}));
     assert.commandWorked(st.s0.adminCommand({split: 'test.foo', find: {_id: 50}}));
     assert.commandWorked(
-        st.s0.adminCommand({moveChunk: 'test.foo', find: {_id: 75}, to: 'shard0001'}));
+        st.s0.adminCommand({moveChunk: 'test.foo', find: {_id: 75}, to: st.shard1.shardName}));
 
     // Make sure the pre-existing mongos already has the routing information loaded into memory
     assert.eq(100, st.s.getDB('test').foo.find().itcount());
@@ -56,7 +58,10 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     });
 
     jsTestLog("Restarting a shard while there are no config servers up");
-    restartShard(st.shard1, false);
+    //restartShard(st.rs1, false);
+    st.rs1.stopSet(null, true, {waitForConnect: false});
+    st.rs1.startSet();
+
 
     jsTestLog("Queries should fail because the shard can't initialize sharding state");
     var error = assert.throws(function() {

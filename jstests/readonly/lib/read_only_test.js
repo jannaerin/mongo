@@ -73,7 +73,8 @@ var StandaloneFixture, ShardedFixture, runReadOnlyTest, zip2, cycleN;
                 // overrideShardIdentity when running in queryableBackupMode, and is only allowed to
                 // be set via config file.
 
-                var shardIdentity = this.shardingTest["d" + i]
+                var shardIdentity = this.shardingTest["rs" + i]
+                                        .getPrimary()
                                         .getDB("admin")
                                         .getCollection("system.version")
                                         .findOne({_id: "shardIdentity"});

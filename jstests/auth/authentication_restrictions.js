@@ -208,7 +208,8 @@
         other: {
             mongosOptions: {bind_ip_all: "", auth: null},
             configOptions: {auth: null},
-            shardOptions: {auth: null}
+            shardOptions: {auth: null},
+            shardAsReplicaSet: false
         }
     });
     testConnection(st.s0,

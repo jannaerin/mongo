@@ -37,7 +37,7 @@
     }
 
     var st = new ShardingTest(
-        {name: "mrShardedOutputAuth", shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1'}});
+        {name: "mrShardedOutputAuth", shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     // Setup the users to the input, output and admin databases
     var mongos = st.s;

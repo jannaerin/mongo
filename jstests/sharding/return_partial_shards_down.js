@@ -52,7 +52,8 @@ assert.eq(3, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("One shard down!");
 
-MongoRunner.stopMongod(st.shard2);
+// MongoRunner.stopMongod(st.shard2);
+st.rs2.stopSet();
 
 jsTest.log("done.");
 
@@ -61,7 +62,8 @@ assert.eq(2, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("Two shards down!");
 
-MongoRunner.stopMongod(st.shard1);
+// MongoRunner.stopMongod(st.shard1);
+st.rs1.stopSet();
 
 jsTest.log("done.");
 
@@ -70,7 +72,8 @@ assert.eq(1, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("All shards down!");
 
-MongoRunner.stopMongod(st.shard0);
+// MongoRunner.stopMongod(st.shard0);
+st.rs0.stopSet();
 
 jsTest.log("done.");
 

@@ -143,7 +143,7 @@
 
     // Run the test on a sharded cluster.
     let cluster = new ShardingTest(
-        {shards: 1, mongos: 1, keyFile: "jstests/libs/key1", other: {shardOptions: {auth: ""}}});
+        {shards: 1, mongos: 1, keyFile: "jstests/libs/key1", other: {shardOptions: {auth: ""}, shardAsReplicaSet: false}});
     runTest(cluster);
     cluster.stop();
 }());

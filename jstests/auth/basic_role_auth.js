@@ -512,7 +512,7 @@ runTests(conn);
 MongoRunner.stopMongod(conn);
 
 jsTest.log('Test sharding');
-var st = new ShardingTest({shards: 1, keyFile: 'jstests/libs/key1'});
+var st = new ShardingTest({shards: 1, keyFile: 'jstests/libs/key1', other: {shardAsReplicaSet: false}});
 runTests(st.s);
 st.stop();
 

@@ -58,6 +58,8 @@
  *       rs: same as above
  *       chunkSize: same as above
  *       keyFile {string}: the location of the keyFile
+ *       shardAsReplicaSet {boolean}: if true, start shard shard servers as single-node replica
+ *          replica sets; default to true
  *
  *       shardOptions {Object}: same as the shards property above.
  *          Can be used to specify options that are common all shards.
@@ -119,6 +121,9 @@ var ShardingTest = function(params) {
     // Timeout to be used for operations scheduled by the sharding test, which must wait for write
     // concern (5 minutes)
     var kDefaultWTimeoutMs = 5 * 60 * 1000;
+
+    // Create default RS
+    // const kMakeDefaultRS = true;
 
     // Publicly exposed variables
 
@@ -722,6 +727,10 @@ var ShardingTest = function(params) {
         if (otherParams.useBridge) {
             MongoRunner.stopMongod(unbridgedConnections[n], undefined, opts);
             this["d" + n].stop();
+        } else if (startShardsAsRS) {
+            // i should stop all nodes?
+            // MongoRunner.stopMongod(this["rs" + n].getPrimary(), undefined, opts);
+            this._rs[n].test.stopSet();
         } else {
             MongoRunner.stopMongod(this["d" + n], undefined, opts);
         }
@@ -821,9 +830,10 @@ var ShardingTest = function(params) {
      */
     this.restartMongod = function(n, opts, beforeRestartCallback) {
         var mongod;
-
         if (otherParams.useBridge) {
             mongod = unbridgedConnections[n];
+        } else if (startShardsAsRS) {
+            mongod = this["rs" + n].getPrimary();
         } else {
             mongod = this["d" + n];
         }
@@ -1026,6 +1036,9 @@ var ShardingTest = function(params) {
     var mongosVerboseLevel = otherParams.hasOwnProperty('verbose') ? otherParams.verbose : 1;
     var numMongos = otherParams.hasOwnProperty('mongos') ? otherParams.mongos : 1;
     var numConfigs = otherParams.hasOwnProperty('config') ? otherParams.config : 3;
+    var startShardsAsRS =
+        otherParams.hasOwnProperty('shardAsReplicaSet') ? otherParams.shardAsReplicaSet : true;
+    jsTest.log("XXXX shard as replica set is " + startShardsAsRS);
 
     // Default enableBalancer to false.
     otherParams.enableBalancer =
@@ -1119,6 +1132,7 @@ var ShardingTest = function(params) {
     // Start the MongoD servers (shards)
     for (var i = 0; i < numShards; i++) {
         if (otherParams.rs || otherParams["rs" + i]) {
+            jsTest.log("XXXX starting as rs part 1");
             var setName = testName + "-rs" + i;
 
             var rsDefaults = {
@@ -1171,7 +1185,61 @@ var ShardingTest = function(params) {
             if (otherParams.useBridge) {
                 unbridgedConnections.push(null);
             }
+
+        } else if (startShardsAsRS) {
+            jsTest.log("XXXX starting as rs part 2");
+            var setName = testName + "-rs" + i;
+
+            var rsDefaults = {
+                useHostname: otherParams.useHostname,
+                noJournalPrealloc: otherParams.nopreallocj,
+                oplogSize: 16,
+                shardsvr: '',
+                pathOpts: Object.merge(pathOpts, {shard: i}),
+            };
+            var rsSettings = rsDefaults.settings;
+            delete rsDefaults.settings;
+
+            var numReplicas = 2;
+            delete rsDefaults.nodes;
+
+            var protocolVersion = rsDefaults.protocolVersion;
+            delete rsDefaults.protocolVersion;
+
+            print("XXX starting default ReplicaSet with config: " + tojson(otherParams));
+            var rs = new ReplSetTest({
+                name: setName,
+                nodes: numReplicas,
+                useHostName: otherParams.useHostname,
+                useBridge: otherParams.useBridge,
+                bridgeOptions: otherParams.bridgeOptions,
+                keyFile: keyFile,
+                protocolVersion: protocolVersion,
+                waitForKeys: false,
+                settings: rsSettings
+            });
+
+            this._rs[i] =
+                {setName: setName, test: rs, nodes: rs.startSet(rsDefaults), url: rs.getURL()};
+
+            print("XXX Initiate");
+            // ReplSetTest.initiate() requires all nodes to be to be authorized to run
+            // replSetGetStatus.
+            // TODO(SERVER-14017): Remove this in favor of using initiate() everywhere.
+            rs.initiateWithAnyNodeAsPrimary();
+            print("XXX Initiate done");
+
+            this["rs" + i] = rs;
+            this._rsObjects[i] = rs;
+
+            _alldbpaths.push(null);
+            this._connections.push(null);
+
+            if (otherParams.useBridge) {
+                unbridgedConnections.push(null);
+            }
         } else {
+            jsTest.log("XXXX no rs!!!");
             var options = {
                 useHostname: otherParams.useHostname,
                 noJournalPrealloc: otherParams.nopreallocj,
@@ -1242,7 +1310,7 @@ var ShardingTest = function(params) {
 
     // Do replication on replica sets if required
     for (var i = 0; i < numShards; i++) {
-        if (!otherParams.rs && !otherParams["rs" + i]) {
+        if (!otherParams.rs && !otherParams["rs" + i] && !startShardsAsRS) {
             continue;
         }
 
@@ -1254,7 +1322,7 @@ var ShardingTest = function(params) {
                 rs.awaitReplication();
             });
         }
-
+        
         rs.awaitSecondaryNodes();
 
         var rsConn = new Mongo(rs.getURL());
@@ -1471,7 +1539,7 @@ var ShardingTest = function(params) {
 
     // Ensure that all CSRS nodes are up to date. This is strictly needed for tests that use
     // multiple mongoses. In those cases, the first mongos initializes the contents of the 'config'
-    // database, but without waiting for those writes to replicate to all the config servers then
+    // database, but without waiting for those writes to rste to all the config servers then
     // the secondary mongoses risk reading from a stale config server and seeing an empty config
     // database.
     this.configRS.awaitLastOpCommitted();

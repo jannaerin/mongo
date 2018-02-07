@@ -16,7 +16,7 @@
     var coll = db.getCollection("stuff");
 
     assert.commandWorked(admin.runCommand({enablesharding: coll.getDB().getName()}));
-    st.ensurePrimaryShard(coll.getDB().getName(), 'shard0001');
+    st.ensurePrimaryShard(coll.getDB().getName(), st.shard1.shardName);
 
     var data = "x";
     var nsq = 16;

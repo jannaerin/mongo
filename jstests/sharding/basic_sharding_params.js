@@ -10,7 +10,8 @@
 
             mongos: {s0: {verbose: 6}, s1: {verbose: 5}},
             config: {c0: {verbose: 4}},
-            shards: {d0: {verbose: 3}, rs1: {nodes: {d0: {verbose: 2}, a1: {verbose: 1}}}}
+            shards: {d0: {verbose: 3}, rs1: {nodes: {d0: {verbose: 2}, a1: {verbose: 1}}}},
+            other:  {shardAsReplicaSet: false}
         });
 
         var s0 = st.s0;
@@ -45,7 +46,8 @@
         var st = new ShardingTest({
             mongos: [{verbose: 5}, {verbose: 4}],
             config: [{verbose: 3}],
-            shards: [{verbose: 2}, {verbose: 1}]
+            shards: [{verbose: 2}, {verbose: 1}],
+            other:  {shardAsReplicaSet: false}
         });
 
         var s0 = st.s0;

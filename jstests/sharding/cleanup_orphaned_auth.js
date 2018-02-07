@@ -20,7 +20,7 @@
     }
 
     var st =
-        new ShardingTest({auth: true, other: {keyFile: 'jstests/libs/key1', useHostname: false}});
+        new ShardingTest({auth: true, other: {keyFile: 'jstests/libs/key1', useHostname: false, shardAsReplicaSet: false}});
 
     var shardAdmin = st.shard0.getDB('admin');
     shardAdmin.createUser(

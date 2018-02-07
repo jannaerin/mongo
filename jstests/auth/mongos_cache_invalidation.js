@@ -17,7 +17,8 @@ var st = new ShardingTest({
         {setParameter: "userCacheInvalidationIntervalSecs=5"},
         {setParameter: "userCacheInvalidationIntervalSecs=600"}
     ],
-    keyFile: 'jstests/libs/key1'
+    keyFile: 'jstests/libs/key1',
+    other: {shardAsReplicaSet: false}
 });
 
 st.s1.getDB('admin').createUser({user: 'root', pwd: 'pwd', roles: ['root']});
