@@ -9,7 +9,7 @@
 (function() {
     'use strict';
 
-    var s = new ShardingTest({shards: 2});
+    var s = new ShardingTest({shards: 2, other: {shardAsReplicaSet: false}});
 
     var db = s.getDB("test");
     var admin = s.getDB("admin");
@@ -108,10 +108,7 @@
         _waitForDelete: true
     }));
 
-    var expectedShardCount = {};
-    expectedShardCount[shard0Name] = 0;
-    expectedShardCount[shard1Name] = 0;
-    
+    var expectedShardCount = {shard0000: 0, shard0001: 0};
     config.chunks.find({ns: 'test.user'}).forEach(function(chunkDoc) {
         var min = chunkDoc.min.num;
         var max = chunkDoc.max.num;

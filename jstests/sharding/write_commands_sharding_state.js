@@ -5,7 +5,7 @@
 (function() {
     'use strict';
 
-    var st = new ShardingTest({name: "write_commands", mongos: 2, shards: 2});
+    var st = new ShardingTest({name: "write_commands", mongos: 2, shards: 2, other: {shardAsReplicaSet: false}});
 
     var dbTestName = 'WriteCommandsTestDB';
     var collName = dbTestName + '.TestColl';
@@ -36,27 +36,27 @@
     assert(st.s1.getDB(dbTestName).TestColl.insert({Key: 21}));
 
     // Make sure the documents are correctly placed
-    printjson(st.rs0.getPrimary().getDB(dbTestName).TestColl.find().toArray());
-    printjson(st.rs1.getPrimary().getDB(dbTestName).TestColl.find().toArray());
+    printjson(st.d0.getDB(dbTestName).TestColl.find().toArray());
+    printjson(st.d1.getDB(dbTestName).TestColl.find().toArray());
 
-    assert.eq(1, st.rs0.getPrimary().getDB(dbTestName).TestColl.count());
-    assert.eq(2, st.rs1.getPrimary().getDB(dbTestName).TestColl.count());
+    assert.eq(1, st.d0.getDB(dbTestName).TestColl.count());
+    assert.eq(2, st.d1.getDB(dbTestName).TestColl.count());
 
-    assert.eq(1, st.rs0.getPrimary().getDB(dbTestName).TestColl.find({Key: 1}).count());
-    assert.eq(1, st.rs1.getPrimary().getDB(dbTestName).TestColl.find({Key: 11}).count());
-    assert.eq(1, st.rs1.getPrimary().getDB(dbTestName).TestColl.find({Key: 21}).count());
+    assert.eq(1, st.d0.getDB(dbTestName).TestColl.find({Key: 1}).count());
+    assert.eq(1, st.d1.getDB(dbTestName).TestColl.find({Key: 11}).count());
+    assert.eq(1, st.d1.getDB(dbTestName).TestColl.find({Key: 21}).count());
 
     // Move chunk [0, 19] to st.shard0.shardName and make sure the documents are correctly placed
     assert.commandWorked(st.s0.adminCommand(
         {moveChunk: collName, find: {Key: 19}, _waitForDelete: true, to: st.shard0.shardName}));
 
     printjson(st.config.getSiblingDB('config').chunks.find().toArray());
-    printjson(st.rs0.getPrimary().getDB(dbTestName).TestColl.find({}).toArray());
-    printjson(st.rs1.getPrimary().getDB(dbTestName).TestColl.find({}).toArray());
+    printjson(st.d0.getDB(dbTestName).TestColl.find({}).toArray());
+    printjson(st.d1.getDB(dbTestName).TestColl.find({}).toArray());
 
     // Now restart all mongod instances, so they don't know yet that they are sharded
-    st.rs0.restart(0);
-    st.rs1.restart(1);
+    st.restartMongod(0);
+    st.restartMongod(1);
 
     // Now that both mongod shards are restarted, they don't know yet that they are part of a
     // sharded
@@ -71,15 +71,15 @@
     // information, see SERVER-19395).
     st.s1.getDB(dbTestName).TestColl.update({Key: 11}, {$inc: {Counter: 1}}, {upsert: true});
 
-    printjson(st.rs0.getPrimary().getDB(dbTestName).TestColl.find({}).toArray());
-    printjson(st.rs1.getPrimary().getDB(dbTestName).TestColl.find({}).toArray());
+    printjson(st.d0.getDB(dbTestName).TestColl.find({}).toArray());
+    printjson(st.d1.getDB(dbTestName).TestColl.find({}).toArray());
 
-    assert.eq(2, st.rs0.getPrimary().getDB(dbTestName).TestColl.count());
-    assert.eq(1, st.rs1.getPrimary().getDB(dbTestName).TestColl.count());
+    assert.eq(2, st.d0.getDB(dbTestName).TestColl.count());
+    assert.eq(1, st.d1.getDB(dbTestName).TestColl.count());
 
-    assert.eq(1, st.rs0.getPrimary().getDB(dbTestName).TestColl.find({Key: 1}).count());
-    assert.eq(1, st.rs0.getPrimary().getDB(dbTestName).TestColl.find({Key: 11}).count());
-    assert.eq(1, st.rs1.getPrimary().getDB(dbTestName).TestColl.find({Key: 21}).count());
+    assert.eq(1, st.d0.getDB(dbTestName).TestColl.find({Key: 1}).count());
+    assert.eq(1, st.d0.getDB(dbTestName).TestColl.find({Key: 11}).count());
+    assert.eq(1, st.d1.getDB(dbTestName).TestColl.find({Key: 21}).count());
 
     st.stop();
 

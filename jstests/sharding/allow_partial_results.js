@@ -12,7 +12,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     const collName = "foo";
     const ns = dbName + "." + collName;
 
-    const st = new ShardingTest({shards: 2});
+    const st = new ShardingTest({shards: 2, other: {shardAsReplicaSet: false}});
 
     jsTest.log("Insert some data.");
     const nDocs = 100;
@@ -49,7 +49,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     assert.eq(nDocs, findRes.cursor.firstBatch.length);
 
     jsTest.log("Stopping " + st.shard0.shardName);
-    st.rs0.stopSet();
+    MongoRunner.stopMongod(st.shard0);
 
     jsTest.log("Without 'allowPartialResults', if some shard down, find fails.");
     assert.commandFailed(coll.runCommand({find: collName}));

@@ -5,7 +5,7 @@
 // Checking UUID consistency involves talking to shards, but this test shuts down shards.
 TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
 
-var st = new ShardingTest({shards: 3, mongos: 1, other: {mongosOptions: {verbose: 2}}});
+var st = new ShardingTest({shards: 3, mongos: 1, other: {mongosOptions: {verbose: 2}, shardAsReplicaSet: false}});
 
 // Stop balancer, we're doing our own manual chunk distribution
 st.stopBalancer();
@@ -52,8 +52,7 @@ assert.eq(3, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("One shard down!");
 
-// MongoRunner.stopMongod(st.shard2);
-st.rs2.stopSet();
+MongoRunner.stopMongod(st.shard2);
 
 jsTest.log("done.");
 
@@ -62,8 +61,7 @@ assert.eq(2, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("Two shards down!");
 
-// MongoRunner.stopMongod(st.shard1);
-st.rs1.stopSet();
+MongoRunner.stopMongod(st.shard1);
 
 jsTest.log("done.");
 
@@ -72,8 +70,7 @@ assert.eq(1, collAllShards.find({}, {}, 0, 0, 0, returnPartialFlag).itcount());
 
 jsTest.log("All shards down!");
 
-// MongoRunner.stopMongod(st.shard0);
-st.rs0.stopSet();
+MongoRunner.stopMongod(st.shard0);
 
 jsTest.log("done.");
 

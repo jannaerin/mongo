@@ -17,15 +17,13 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
      * Restarts the mongod backing the specified shard instance, without restarting the mongobridge.
      */
     function restartShard(shard, waitForConnect) {
-        //MongoRunner.stopMongod(shard);
-        shard.stopSet();
+        MongoRunner.stopMongod(shard);
         shard.restart = true;
         shard.waitForConnect = waitForConnect;
-        //MongoRunner.runMongod(shard);
-        shard.start();
+        MongoRunner.runMongod(shard);
     }
 
-    var st = new ShardingTest({shards: 2});
+    var st = new ShardingTest({shards: 2, other: {shardAsReplicaSet: false}});
 
     jsTestLog("Setting up initial data");
 
@@ -58,10 +56,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     });
 
     jsTestLog("Restarting a shard while there are no config servers up");
-    //restartShard(st.rs1, false);
-    st.rs1.stopSet(null, true, {waitForConnect: false});
-    st.rs1.startSet();
-
+    restartShard(st.shard1, false);
 
     jsTestLog("Queries should fail because the shard can't initialize sharding state");
     var error = assert.throws(function() {

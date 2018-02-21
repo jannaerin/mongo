@@ -8,7 +8,7 @@
 (function() {
     'use strict';
 
-    var st = new ShardingTest({shards: 10, mongos: 3});
+    var st = new ShardingTest({shards: 10, mongos: 3, other: {shardAsReplicaSet: false}});
 
     var mongosA = st.s0;
     var mongosB = st.s1;
@@ -22,20 +22,20 @@
     var collC = mongosB.getCollection("" + collA);
 
     var shards = [
-        st.rs0,
-        st.rs1,
-        st.rs2,
-        st.rs3,
-        st.rs4,
-        st.rs5,
-        st.rs6,
-        st.rs7,
-        st.rs8,
-        st.rs9
+        st.shard0,
+        st.shard1,
+        st.shard2,
+        st.shard3,
+        st.shard4,
+        st.shard5,
+        st.shard6,
+        st.shard7,
+        st.shard8,
+        st.shard9
     ];
 
     assert.commandWorked(admin.runCommand({enableSharding: "" + collA.getDB()}));
-    st.ensurePrimaryShard(collA.getDB().getName(), st.rs1.name);
+    st.ensurePrimaryShard(collA.getDB().getName(), st.shard1.name);
     assert.commandWorked(admin.runCommand({shardCollection: "" + collA, key: {_id: 1}}));
 
     jsTestLog("Splitting up the collection...");
@@ -44,7 +44,7 @@
     for (var i = 0; i < shards.length; i++) {
         assert.commandWorked(admin.runCommand({split: "" + collA, middle: {_id: i}}));
         assert.commandWorked(
-            admin.runCommand({moveChunk: "" + collA, find: {_id: i}, to: shards[i].name}));
+            admin.runCommand({moveChunk: "" + collA, find: {_id: i}, to: shards[i].shardName}));
     }
 
     mongosB.getDB("admin").runCommand({flushRouterConfig: 1});
@@ -58,7 +58,7 @@
         assert.commandWorked(admin.runCommand({
             moveChunk: "" + collA,
             find: {_id: i},
-            to: shards[(i + 1) % shards.length].name
+            to: shards[(i + 1) % shards.length].shardName
         }));
     }
 
