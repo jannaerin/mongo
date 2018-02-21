@@ -116,6 +116,7 @@ var ReplSetTest = function(opts) {
      */
     function _callIsMaster() {
         _clearLiveNodes();
+
         var twoPrimaries = false;
         self.nodes.forEach(function(node) {
             try {
@@ -137,6 +138,7 @@ var ReplSetTest = function(opts) {
         if (twoPrimaries) {
             return false;
         }
+
         return self.liveNodes.master || false;
     }
 
@@ -522,6 +524,7 @@ var ReplSetTest = function(opts) {
         assert.soonNoExcept(function() {
             // Reload who the current slaves are
             self.getPrimary(timeout);
+
             var slaves = self.liveNodes.slaves;
             var len = slaves.length;
             var ready = true;
@@ -531,6 +534,7 @@ var ReplSetTest = function(opts) {
                 var arbiter = (isMaster.arbiterOnly == undefined ? false : isMaster.arbiterOnly);
                 ready = ready && (isMaster.secondary || arbiter);
             }
+
             return ready;
         }, "Awaiting secondaries", timeout);
     };
@@ -854,7 +858,7 @@ var ReplSetTest = function(opts) {
         if (!_isElectable(config.members[0])) {
             throw Error("The node at index 0 must be electable");
         }
-        jsTestLog("xxx master is " + tojson(master));
+
         // Start up a single node replica set then reconfigure to the correct size (if the config
         // contains more than 1 node), so the primary is elected more quickly.
         var originalMembers, originalSettings;
@@ -868,13 +872,12 @@ var ReplSetTest = function(opts) {
 
         cmd[cmdKey] = config;
         printjson(cmd);
-        jsTestLog("xxx getting a primary");
+
         assert.commandWorked(master.runCommand(cmd), tojson(cmd));
         this.getPrimary();  // Blocks until there is a primary.
-        jsTestLog("xxx found a primary");
+
         // Reconfigure the set to contain the correct number of nodes (if necessary).
         if (originalMembers) {
-            jsTestLog("xxx do i get in here");
             config.members = originalMembers;
             if (originalSettings) {
                 config.settings = originalSettings;
@@ -930,9 +933,9 @@ var ReplSetTest = function(opts) {
             master = this.getPrimary();
             jsTest.authenticateNodes(this.nodes);
         }
-        jsTestLog("xxx going to fail below");
+
         this.awaitSecondaryNodes();
-        jsTestLog("xxx do i print this");
+
         let shouldWaitForKeys = true;
         if (self.waitForKeys != undefined) {
             shouldWaitForKeys = self.waitForKeys;
@@ -1155,7 +1158,6 @@ var ReplSetTest = function(opts) {
 
     // Wait until the optime of the specified type reaches the primary's last applied optime.
     this.awaitReplication = function(timeout, secondaryOpTimeType) {
-        print("xxx am i here in await replicaiton?");
         timeout = timeout || self.kDefaultTimeoutMS;
         secondaryOpTimeType = secondaryOpTimeType || ReplSetTest.OpTimeType.LAST_APPLIED;
 
@@ -1175,9 +1177,9 @@ var ReplSetTest = function(opts) {
                 return true;
             }, "awaiting oplog query", timeout);
         };
-        print("xxx calling await");
+
         awaitLastOpTimeWrittenFn();
-        print("xxx done with waiting");
+
         // get the latest config version from master (with a few retries in case of error)
         var masterConfigVersion;
         var masterName;
@@ -1279,7 +1281,6 @@ var ReplSetTest = function(opts) {
                 return false;
             }
         }, "awaiting replication", timeout);
-        print("XXX done waiting?");
     };
 
     this.getHashes = function(db) {
