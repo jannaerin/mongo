@@ -2,7 +2,7 @@
 (function() {
     'use strict';
 
-    var st = new ShardingTest({shards: 2, mongos: 2});
+    var st = new ShardingTest({shards: 2, mongos: 2, other: {shardAsReplicaSet: false}});
 
     var mongos = st.s;
     var staleMongos = st.s1;

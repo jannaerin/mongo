@@ -42,7 +42,8 @@
                     cursorTimeoutMillis: mongosCursorTimeoutMs,
                     clientCursorMonitorFrequencySecs: cursorMonitorFrequencySecs
                 }
-            }
+            },
+            shardAsReplicaSet: false
         },
         enableBalancer: false
     });

@@ -11,10 +11,10 @@
 
     const kFailPointName = "waitAfterPinningCursorBeforeGetMoreBatch";
 
-    const st = new ShardingTest({shards: 2});
+    const st = new ShardingTest({shards: 2, other: {shardAsReplicaSet: false}});
     const kDBName = "test";
     const mongosDB = st.s.getDB(kDBName);
-    const shard0DB = st.rs0.getPrimary().getDB(kDBName);
+    const shard0DB = st.shard0.getDB(kDBName);
 
     let coll = mongosDB.jstest_kill_pinned_cursor;
     coll.drop();

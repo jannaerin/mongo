@@ -3,7 +3,7 @@ var shardOpts = [
     {}  // just use default params
 ];
 
-var st = new ShardingTest({shards: shardOpts, other: {nopreallocj: 1}});
+var st = new ShardingTest({shards: shardOpts, other: {nopreallocj: 1, shardAsReplicaSet: false}});
 var mongos = st.s;
 
 st.shardColl('bar', {x: 1});
@@ -22,7 +22,7 @@ var reduce = function(key, values) {
 };
 
 var mrResult = testDB.runCommand({mapreduce: 'bar', map: map, reduce: reduce, out: {inline: 1}});
-jsTest.log("fffffff "+ tojson(mrResult));
+
 assert.eq(0, mrResult.ok, 'mr result: ' + tojson(mrResult));
 
 // Confirm that mongos did not crash
