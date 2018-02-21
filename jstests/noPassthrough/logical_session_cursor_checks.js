@@ -75,8 +75,12 @@
 
     function Sharding() {
         // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
-        this.st = new ShardingTest(
-            {shards: 1, config: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
+        this.st = new ShardingTest({
+            shards: 1,
+            config: 1,
+            mongos: 1,
+            other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}
+        });
     }
 
     Sharding.prototype.stop = function() {

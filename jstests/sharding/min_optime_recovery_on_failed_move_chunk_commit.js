@@ -31,8 +31,7 @@
     st.restartMongod(0);
 
     // After the restart, the shard should have updated the opTime and reset minOpTimeUpdaters.
-    minOpTimeRecoveryDoc =
-        st.d0.getDB('admin').system.version.findOne({_id: 'minOpTimeRecovery'});
+    minOpTimeRecoveryDoc = st.d0.getDB('admin').system.version.findOne({_id: 'minOpTimeRecovery'});
 
     assert.neq(null, minOpTimeRecoveryDoc);
     assert.gt(minOpTimeRecoveryDoc.minOpTime.ts.getTime(), 0);

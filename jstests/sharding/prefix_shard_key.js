@@ -142,7 +142,8 @@
         var coll2 = db.foo2;
         coll2.drop();
         if (s.getPrimaryShardIdForDatabase(coll2.getDB()) != s.shard0.shardName) {
-            var moveRes = admin.runCommand({movePrimary: coll2.getDB() + "", to: s.shard0.shardName});
+            var moveRes =
+                admin.runCommand({movePrimary: coll2.getDB() + "", to: s.shard0.shardName});
             assert.eq(moveRes.ok, 1, "primary not moved correctly");
         }
 

@@ -4,7 +4,12 @@
 var st = new ShardingTest({
     shards: 2,
     mongos: 1,
-    other: {chunkSize: 1, enableAutoSplit: true, shardOptions: {moveParanoia: ""}, shardAsReplicaSet: false}
+    other: {
+        chunkSize: 1,
+        enableAutoSplit: true,
+        shardOptions: {moveParanoia: ""},
+        shardAsReplicaSet: false
+    }
 });
 
 load("jstests/sharding/movechunk_include.js");

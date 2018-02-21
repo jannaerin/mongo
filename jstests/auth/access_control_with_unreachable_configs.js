@@ -12,7 +12,12 @@ var st = new ShardingTest({
     config: 1,
     keyFile: 'jstests/libs/key1',
     useHostname: false,  // Needed when relying on the localhost exception
-    other: {shardOptions: dopts, configOptions: dopts, mongosOptions: {verbose: 1}, shardAsReplicaSet: false}
+    other: {
+        shardOptions: dopts,
+        configOptions: dopts,
+        mongosOptions: {verbose: 1},
+        shardAsReplicaSet: false
+    }
 });
 var mongos = st.s;
 var config = st.config0;

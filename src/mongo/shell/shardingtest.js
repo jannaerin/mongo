@@ -1273,7 +1273,7 @@ var ShardingTest = function(params) {
                 rs.awaitReplication();
             });
         }
-        
+
         rs.awaitSecondaryNodes();
 
         var rsConn = new Mongo(rs.getURL());

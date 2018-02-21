@@ -12,7 +12,7 @@
     let st = new ShardingTest({
         shards: [{binVersion: "latest"}, {binVersion: "last-stable"}],
         mongos: {binVersion: "latest"},
-        other:  {shardAsReplicaSet: false},
+        other: {shardAsReplicaSet: false},
     });
 
     let testDB = st.s.getDB("test");

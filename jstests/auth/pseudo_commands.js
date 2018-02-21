@@ -114,7 +114,7 @@ function runTest(conn) {
             try {
                 var opid;
                 if (isMongos(db)) {  // opid format different between mongos and mongod
-                    opid = st.shard0.shardName+":1234";
+                    opid = st.shard0.shardName + ":1234";
                 } else {
                     opid = 1234;
                 }
@@ -191,6 +191,7 @@ MongoRunner.stopMongod(conn);
 
 jsTest.log('Test sharding');
 // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
-var st = new ShardingTest({shards: 2, config: 3, keyFile: 'jstests/libs/key1', other: {shardAsReplicaSet: false}});
+var st = new ShardingTest(
+    {shards: 2, config: 3, keyFile: 'jstests/libs/key1', other: {shardAsReplicaSet: false}});
 runTest(st.s);
 st.stop();
