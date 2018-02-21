@@ -28,6 +28,7 @@
         assert.writeOK(collection.insert(obj));
     }
 
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
     var cluster = new ShardingTest(
         {name: "authwhere", shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 

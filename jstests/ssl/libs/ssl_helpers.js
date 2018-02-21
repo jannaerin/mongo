@@ -109,6 +109,7 @@ function mixedShardTest(options1, options2, shouldSucceed) {
         // Start ShardingTest with enableBalancer because ShardingTest attempts to turn
         // off the balancer otherwise, which it will not be authorized to do if auth is enabled.
         // Once SERVER-14017 is fixed the "enableBalancer" line can be removed.
+        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
         var st = new ShardingTest({
             mongos: [options1],
             config: [options1],

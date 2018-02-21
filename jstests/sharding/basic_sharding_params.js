@@ -6,6 +6,7 @@
     'use strict';
 
     function shardingTestUsingObjects() {
+        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
         var st = new ShardingTest({
 
             mongos: {s0: {verbose: 6}, s1: {verbose: 5}},
@@ -43,6 +44,7 @@
     }
 
     function shardingTestUsingArrays() {
+        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
         var st = new ShardingTest({
             mongos: [{verbose: 5}, {verbose: 4}],
             config: [{verbose: 3}],

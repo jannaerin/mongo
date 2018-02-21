@@ -9,6 +9,7 @@ var hasAuthzError = function(result) {
     assert.eq(authzErrorCode, result.code);
 };
 
+// TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
 var st = new ShardingTest({
     shards: 2,
     config: 3,

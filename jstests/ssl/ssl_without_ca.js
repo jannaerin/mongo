@@ -42,6 +42,7 @@ assert.isnull(conn, "server started with x509 clusterAuthMode but no CA file");
 
 jsTest.log("Assert mongos doesn\'t start with CA file missing and clusterAuthMode=x509.");
 
+// TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
 assert.throws(function() {
     new ShardingTest({
         shards: 1,

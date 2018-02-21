@@ -4,6 +4,8 @@
 // there are.
 
 var dopts = {smallfiles: "", nopreallocj: ""};
+
+// TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
 var st = new ShardingTest({
     shards: 1,
     mongos: 1,

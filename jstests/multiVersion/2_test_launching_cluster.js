@@ -22,6 +22,7 @@ load('./jstests/multiVersion/libs/verify_versions.js');
     jsTest.log("Testing mixed versions...");
 
     // Set up a multi-version cluster
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
     var st = new ShardingTest({
         shards: 2,
         mongos: 2,
