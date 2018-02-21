@@ -7,7 +7,7 @@
  * @tags: [requires_persistence]
  */
 
- // This test shuts down shards.
+// This test shuts down shards.
 TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
 
 (function() {

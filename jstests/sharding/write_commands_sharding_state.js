@@ -5,7 +5,8 @@
 (function() {
     'use strict';
 
-    var st = new ShardingTest({name: "write_commands", mongos: 2, shards: 2, other: {shardAsReplicaSet: false}});
+    var st = new ShardingTest(
+        {name: "write_commands", mongos: 2, shards: 2, other: {shardAsReplicaSet: false}});
 
     var dbTestName = 'WriteCommandsTestDB';
     var collName = dbTestName + '.TestColl';

@@ -33,7 +33,7 @@ function setupMoveChunkTest(st) {
             break;
         }
     }
-    jsTest.log("ffff moving to "+ to);
+    jsTest.log("ffff moving to " + to);
     var result = st.adminCommand({
         movechunk: "test.foo",
         find: {_id: 1},

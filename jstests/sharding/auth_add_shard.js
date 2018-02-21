@@ -15,7 +15,8 @@
 
     // set up a 2 shard cluster with keyfile
     // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
-    var st = new ShardingTest({shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
+    var st = new ShardingTest(
+        {shards: 1, mongos: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     var mongos = st.s0;
     var admin = mongos.getDB("admin");
@@ -69,8 +70,7 @@
     }
 
     // move a chunk
-    assert.commandWorked(
-        admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: conn.name}));
+    assert.commandWorked(admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: conn.name}));
 
     // verify the chunk was moved
     admin.runCommand({flushRouterConfig: 1});

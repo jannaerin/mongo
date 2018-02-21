@@ -29,8 +29,12 @@
 
     // Test a sharded cluster with standalone shards.
     // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
-    const clusterWithStandalones = new ShardingTest(
-        {shards: 2, other: {shardOptions: {enableMajorityReadConcern: ""}}, config: 1, shardAsReplicaSet: false});
+    const clusterWithStandalones = new ShardingTest({
+        shards: 2,
+        other: {shardOptions: {enableMajorityReadConcern: ""}},
+        config: 1,
+        shardAsReplicaSet: false
+    });
     // Make sure the database exists before running any commands.
     const mongosDB = clusterWithStandalones.getDB("test");
     // enableSharding will create the db at the cluster level but not on the shards. $changeStream

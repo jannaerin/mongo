@@ -6,7 +6,8 @@
     "use strict";
 
     // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
-    var st = new ShardingTest({shards: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
+    var st = new ShardingTest(
+        {shards: 1, other: {keyFile: 'jstests/libs/key1', shardAsReplicaSet: false}});
 
     var adminUser = {db: "admin", username: "foo", password: "bar"};
 
@@ -17,8 +18,7 @@
     st.adminCommand({enableSharding: 'test'});
     st.adminCommand({shardCollection: 'test.user', key: {x: 1}});
 
-    st.shard0.getDB('admin').createUser(
-        {user: 'user', pwd: 'pwd', roles: jsTest.adminUserRoles});
+    st.shard0.getDB('admin').createUser({user: 'user', pwd: 'pwd', roles: jsTest.adminUserRoles});
     st.shard0.getDB('admin').auth('user', 'pwd');
 
     var maxSecs = Math.pow(2, 32) - 1;
@@ -32,8 +32,7 @@
     assert.neq(null, status.sharding);
     assert.lt(status.sharding.lastSeenConfigServerOpTime.t, maxSecs);
 
-    st.shard0.getDB('admin').createUser(
-        {user: 'internal', pwd: 'pwd', roles: ['__system']});
+    st.shard0.getDB('admin').createUser({user: 'internal', pwd: 'pwd', roles: ['__system']});
     st.shard0.getDB('admin').auth('internal', 'pwd');
 
     res = st.shard0.getDB('test').runCommandWithMetadata({ping: 1}, metadata);

@@ -52,7 +52,12 @@ var StandaloneFixture, ShardedFixture, runReadOnlyTest, zip2, cycleN;
     };
 
     ShardedFixture.prototype.runLoadPhase = function runLoadPhase(test) {
-        this.shardingTest = new ShardingTest({nopreallocj: true, mongos: 1, shards: this.nShards, other: {shardAsReplicaSet: false}});
+        this.shardingTest = new ShardingTest({
+            nopreallocj: true,
+            mongos: 1,
+            shards: this.nShards,
+            other: {shardAsReplicaSet: false}
+        });
 
         this.paths = this.shardingTest.getDBPaths();
 
@@ -73,7 +78,7 @@ var StandaloneFixture, ShardedFixture, runReadOnlyTest, zip2, cycleN;
                 // overrideShardIdentity when running in queryableBackupMode, and is only allowed to
                 // be set via config file.
 
-                var shardIdentity = this.shardingTest["rs" + i]
+                var shardIdentity = this.shardingTest["d" + i]
                                         .getPrimary()
                                         .getDB("admin")
                                         .getCollection("system.version")

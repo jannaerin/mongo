@@ -5,7 +5,8 @@
 // Checking UUID consistency involves talking to shards, but this test shuts down shards.
 TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
 
-var st = new ShardingTest({shards: 3, mongos: 1, other: {mongosOptions: {verbose: 2}, shardAsReplicaSet: false}});
+var st = new ShardingTest(
+    {shards: 3, mongos: 1, other: {mongosOptions: {verbose: 2}, shardAsReplicaSet: false}});
 
 // Stop balancer, we're doing our own manual chunk distribution
 st.stopBalancer();

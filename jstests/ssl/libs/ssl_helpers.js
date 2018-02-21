@@ -114,8 +114,7 @@ function mixedShardTest(options1, options2, shouldSucceed) {
             mongos: [options1],
             config: [options1],
             shards: [options1, options2],
-            other: {enableBalancer: true,
-            shardAsReplicaSet: false}
+            other: {enableBalancer: true, shardAsReplicaSet: false}
         });
 
         // Create admin user in case the options include auth
