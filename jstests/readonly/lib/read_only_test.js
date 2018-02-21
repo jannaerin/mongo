@@ -79,7 +79,6 @@ var StandaloneFixture, ShardedFixture, runReadOnlyTest, zip2, cycleN;
                 // be set via config file.
 
                 var shardIdentity = this.shardingTest["d" + i]
-                                        .getPrimary()
                                         .getDB("admin")
                                         .getCollection("system.version")
                                         .findOne({_id: "shardIdentity"});
