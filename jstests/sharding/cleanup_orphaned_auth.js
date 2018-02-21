@@ -19,6 +19,7 @@
         doassert(finalMsg);
     }
 
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
     var st =
         new ShardingTest({auth: true, other: {keyFile: 'jstests/libs/key1', useHostname: false, shardAsReplicaSet: false}});
 

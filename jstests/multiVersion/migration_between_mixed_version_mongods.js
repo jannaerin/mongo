@@ -12,6 +12,7 @@ load("./jstests/multiVersion/libs/verify_versions.js");
 (function() {
     "use strict";
 
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
     var options = {
         shards: [
             {binVersion: "last-stable"},

@@ -200,6 +200,7 @@
     rst.stopSet();
 
     print("Testing sharded cluster");
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
     var st = new ShardingTest({
         mongos: 2,
         config: 3,

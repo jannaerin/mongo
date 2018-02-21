@@ -186,6 +186,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     };
 
     var start = function() {
+        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
         return new ShardingTest({
             auth: "",
             shards: numShards,
