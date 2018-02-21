@@ -1038,7 +1038,6 @@ var ShardingTest = function(params) {
     var numConfigs = otherParams.hasOwnProperty('config') ? otherParams.config : 3;
     var startShardsAsRS =
         otherParams.hasOwnProperty('shardAsReplicaSet') ? otherParams.shardAsReplicaSet : true;
-    jsTest.log("XXXX shard as replica set is " + startShardsAsRS);
 
     // Default enableBalancer to false.
     otherParams.enableBalancer =
@@ -1132,7 +1131,6 @@ var ShardingTest = function(params) {
     // Start the MongoD servers (shards)
     for (var i = 0; i < numShards; i++) {
         if (otherParams.rs || otherParams["rs" + i]) {
-            jsTest.log("XXXX starting as rs part 1");
             var setName = testName + "-rs" + i;
 
             var rsDefaults = {
@@ -1187,7 +1185,6 @@ var ShardingTest = function(params) {
             }
 
         } else if (startShardsAsRS) {
-            jsTest.log("XXXX starting as rs part 2");
             var setName = testName + "-rs" + i;
 
             var rsDefaults = {
@@ -1206,7 +1203,6 @@ var ShardingTest = function(params) {
             var protocolVersion = rsDefaults.protocolVersion;
             delete rsDefaults.protocolVersion;
 
-            print("XXX starting default ReplicaSet with config: " + tojson(otherParams));
             var rs = new ReplSetTest({
                 name: setName,
                 nodes: numReplicas,
@@ -1222,12 +1218,10 @@ var ShardingTest = function(params) {
             this._rs[i] =
                 {setName: setName, test: rs, nodes: rs.startSet(rsDefaults), url: rs.getURL()};
 
-            print("XXX Initiate");
             // ReplSetTest.initiate() requires all nodes to be to be authorized to run
             // replSetGetStatus.
             // TODO(SERVER-14017): Remove this in favor of using initiate() everywhere.
             rs.initiateWithAnyNodeAsPrimary();
-            print("XXX Initiate done");
 
             this["rs" + i] = rs;
             this._rsObjects[i] = rs;
@@ -1239,7 +1233,6 @@ var ShardingTest = function(params) {
                 unbridgedConnections.push(null);
             }
         } else {
-            jsTest.log("XXXX no rs!!!");
             var options = {
                 useHostname: otherParams.useHostname,
                 noJournalPrealloc: otherParams.nopreallocj,
