@@ -1130,7 +1130,7 @@ var ShardingTest = function(params) {
 
     // Start the MongoD servers (shards)
     for (var i = 0; i < numShards; i++) {
-        if (otherParams.rs || otherParams["rs" + i]) {
+        if (otherParams.rs || otherParams["rs" + i] || startShardsAsRS) {
             var setName = testName + "-rs" + i;
 
             var rsDefaults = {
@@ -1141,63 +1141,21 @@ var ShardingTest = function(params) {
                 pathOpts: Object.merge(pathOpts, {shard: i}),
             };
 
-            rsDefaults = Object.merge(rsDefaults, otherParams.rs);
-            rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
-            rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
-            rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
-            var rsSettings = rsDefaults.settings;
-            delete rsDefaults.settings;
-
-            var numReplicas = rsDefaults.nodes || 3;
-            delete rsDefaults.nodes;
-
-            var protocolVersion = rsDefaults.protocolVersion;
-            delete rsDefaults.protocolVersion;
-
-            var rs = new ReplSetTest({
-                name: setName,
-                nodes: numReplicas,
-                useHostName: otherParams.useHostname,
-                useBridge: otherParams.useBridge,
-                bridgeOptions: otherParams.bridgeOptions,
-                keyFile: keyFile,
-                protocolVersion: protocolVersion,
-                waitForKeys: false,
-                settings: rsSettings
-            });
-
-            this._rs[i] =
-                {setName: setName, test: rs, nodes: rs.startSet(rsDefaults), url: rs.getURL()};
-
-            // ReplSetTest.initiate() requires all nodes to be to be authorized to run
-            // replSetGetStatus.
-            // TODO(SERVER-14017): Remove this in favor of using initiate() everywhere.
-            rs.initiateWithAnyNodeAsPrimary();
-
-            this["rs" + i] = rs;
-            this._rsObjects[i] = rs;
-
-            _alldbpaths.push(null);
-            this._connections.push(null);
-
-            if (otherParams.useBridge) {
-                unbridgedConnections.push(null);
+            if (otherParams.rs || otherParams["rs" + i]) {
+                rsDefaults = Object.merge(rsDefaults, otherParams.rs);
+                rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
+                rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
+                rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
             }
 
-        } else if (startShardsAsRS) {
-            var setName = testName + "-rs" + i;
-
-            var rsDefaults = {
-                useHostname: otherParams.useHostname,
-                noJournalPrealloc: otherParams.nopreallocj,
-                oplogSize: 16,
-                shardsvr: '',
-                pathOpts: Object.merge(pathOpts, {shard: i}),
-            };
             var rsSettings = rsDefaults.settings;
             delete rsDefaults.settings;
 
-            var numReplicas = 2;
+            if (otherParams.rs || otherParams["rs" + i]) {
+                var numReplicas = rsDefaults.nodes || 3;
+            } else {
+                var numReplicas = 2;
+            }
             delete rsDefaults.nodes;
 
             var protocolVersion = rsDefaults.protocolVersion;
