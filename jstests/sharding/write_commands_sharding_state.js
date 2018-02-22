@@ -4,7 +4,7 @@
 
 (function() {
     'use strict';
-    
+ 
     // TODO: SERVER-33444 remove shardAsReplicaSet: false
     var st = new ShardingTest(
         {name: "write_commands", mongos: 2, shards: 2, other: {shardAsReplicaSet: false}});
