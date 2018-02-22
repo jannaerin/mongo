@@ -26,6 +26,7 @@
 
     const cursorMonitorFrequencySecs = 1;
 
+    // TODO: SERVER-33444 remove shardAsReplicaSet: false
     const st = new ShardingTest({
         shards: 2,
         other: {

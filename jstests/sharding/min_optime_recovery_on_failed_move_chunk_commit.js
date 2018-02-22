@@ -5,6 +5,7 @@
 (function() {
     "use strict";
 
+    // TODO: SERVER-33444 remove shardAsReplicaSet: false
     var st = new ShardingTest({shards: 1, other: {shardAsReplicaSet: false}});
 
     // Insert a recovery doc with non-zero minOpTimeUpdaters to simulate a migration
