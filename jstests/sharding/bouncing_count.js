@@ -36,7 +36,7 @@
     ];
 
     assert.commandWorked(admin.runCommand({enableSharding: "" + collA.getDB()}));
-    st.ensurePrimaryShard(collA.getDB().getName(), st.shard1.name);
+    st.ensurePrimaryShard(collA.getDB().getName(), st.shard1.shardName);
     assert.commandWorked(admin.runCommand({shardCollection: "" + collA, key: {_id: 1}}));
 
     jsTestLog("Splitting up the collection...");

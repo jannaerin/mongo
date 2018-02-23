@@ -58,8 +58,8 @@
  *       rs: same as above
  *       chunkSize: same as above
  *       keyFile {string}: the location of the keyFile
- *       shardAsReplicaSet {boolean}: if true, start shard shard servers as single-node replica
- *          replica sets; default to true
+ *       shardAsReplicaSet {boolean}: if true, start shards as 2 node replica sets. default
+ *          is true.
  *
  *       shardOptions {Object}: same as the shards property above.
  *          Can be used to specify options that are common all shards.
@@ -121,9 +121,6 @@ var ShardingTest = function(params) {
     // Timeout to be used for operations scheduled by the sharding test, which must wait for write
     // concern (5 minutes)
     var kDefaultWTimeoutMs = 5 * 60 * 1000;
-
-    // Create default RS
-    // const kMakeDefaultRS = true;
 
     // Publicly exposed variables
 
@@ -728,8 +725,6 @@ var ShardingTest = function(params) {
             MongoRunner.stopMongod(unbridgedConnections[n], undefined, opts);
             this["d" + n].stop();
         } else if (startShardsAsRS) {
-            // i should stop all nodes?
-            // MongoRunner.stopMongod(this["rs" + n].getPrimary(), undefined, opts);
             this._rs[n].test.stopSet();
         } else {
             MongoRunner.stopMongod(this["d" + n], undefined, opts);
@@ -832,8 +827,6 @@ var ShardingTest = function(params) {
         var mongod;
         if (otherParams.useBridge) {
             mongod = unbridgedConnections[n];
-        } else if (startShardsAsRS) {
-            mongod = this["rs" + n].getPrimary();
         } else {
             mongod = this["d" + n];
         }
@@ -1490,7 +1483,7 @@ var ShardingTest = function(params) {
 
     // Ensure that all CSRS nodes are up to date. This is strictly needed for tests that use
     // multiple mongoses. In those cases, the first mongos initializes the contents of the 'config'
-    // database, but without waiting for those writes to rste to all the config servers then
+    // database, but without waiting for those writes to replicate to all the config servers then
     // the secondary mongoses risk reading from a stale config server and seeing an empty config
     // database.
     this.configRS.awaitLastOpCommitted();
