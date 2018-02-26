@@ -396,7 +396,6 @@ var ShardingTest = function(params) {
                 this.stopMongod(i, opts);
             }
         }
-        
 
         if (this.configRS) {
             this.configRS.stopSet(undefined, undefined, opts);
