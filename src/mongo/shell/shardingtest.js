@@ -1055,6 +1055,7 @@ var ShardingTest = function(params) {
         var tempCount = 0;
         for (var i in numShards) {
             otherParams[i] = numShards[i];
+
             tempCount++;
         }
 
@@ -1140,6 +1141,11 @@ var ShardingTest = function(params) {
                 rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
                 rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
             }
+            if (startShardsAsRS) {
+                rsDefaults = Object.merge(rsDefaults, otherParams["d" + i]);
+                rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
+                rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
+            }
 
             var rsSettings = rsDefaults.settings;
             delete rsDefaults.settings;
@@ -1153,8 +1159,6 @@ var ShardingTest = function(params) {
 
             var protocolVersion = rsDefaults.protocolVersion;
             delete rsDefaults.protocolVersion;
-
-            rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
 
             var rs = new ReplSetTest({
                 name: setName,
@@ -1194,7 +1198,7 @@ var ShardingTest = function(params) {
                 shardsvr: '',
                 keyFile: keyFile
             };
-
+            jsTest.log("xxx no rs options "+ tojson(options));
             if (jsTestOptions().shardMixedBinVersions) {
                 if (!otherParams.shardOptions) {
                     otherParams.shardOptions = {};
@@ -1215,7 +1219,9 @@ var ShardingTest = function(params) {
             }
 
             options = Object.merge(options, otherParams.shardOptions);
+            jsTest.log("xxx no rs options "+ tojson(options));
             options = Object.merge(options, otherParams["d" + i]);
+            jsTest.log("xxx no rs options "+ tojson(options));
 
             options.port = options.port || allocatePort();
 

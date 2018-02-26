@@ -4,7 +4,7 @@ var shardOpts = [
 ];
 
 // TODO: SERVER-33444 remove shardAsReplicaSet: false
-var st = new ShardingTest({shards: shardOpts, other: {nopreallocj: 1, shardAsReplicaSet: false}});
+var st = new ShardingTest({shards: shardOpts, other: {nopreallocj: 1}});
 var mongos = st.s;
 
 st.shardColl('bar', {x: 1});

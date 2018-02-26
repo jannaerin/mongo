@@ -6,15 +6,13 @@
     'use strict';
 
     function shardingTestUsingObjects() {
-        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
         var st = new ShardingTest({
 
             mongos: {s0: {verbose: 6}, s1: {verbose: 5}},
             config: {c0: {verbose: 4}},
-            shards: {d0: {verbose: 3}, rs1: {nodes: {d0: {verbose: 2}, a1: {verbose: 1}}}},
-            other: {shardAsReplicaSet: false}
+            shards: {d0: {verbose: 3}, rs1: {nodes: {d0: {verbose: 2}, a1: {verbose: 1}}}}
         });
-
+        jsTest.log("xxxx objects");
         var s0 = st.s0;
         assert.eq(s0, st._mongos[0]);
 
@@ -24,11 +22,14 @@
         var c0 = st.c0;
         assert.eq(c0, st._configServers[0]);
 
-        var d0 = st.d0;
-        assert.eq(d0, st._connections[0]);
+        var rs0 = st.rs0;
+        assert.eq(rs0, st._rsObjects[0]);
 
         var rs1 = st.rs1;
         assert.eq(rs1, st._rsObjects[1]);
+
+        var rs0_d0 = rs0.nodes[0];
+        var rs0_d1 = rs0.nodes[1];
 
         var rs1_d0 = rs1.nodes[0];
         var rs1_a1 = rs1.nodes[1];
@@ -36,7 +37,8 @@
         assert(s0.commandLine.hasOwnProperty("vvvvvv"));
         assert(s1.commandLine.hasOwnProperty("vvvvv"));
         assert(c0.commandLine.hasOwnProperty("vvvv"));
-        assert(d0.commandLine.hasOwnProperty("vvv"));
+        assert(rs0_d0.commandLine.hasOwnProperty("vvv"));
+        assert(rs0_d1.commandLine.hasOwnProperty("vvv"));
         assert(rs1_d0.commandLine.hasOwnProperty("vv"));
         assert(rs1_a1.commandLine.hasOwnProperty("v"));
 
@@ -44,12 +46,11 @@
     }
 
     function shardingTestUsingArrays() {
-        // TODO: Remove 'shardAsReplicaSet: false' when SERVER-32672 is fixed.
+        jsTest.log("xxxx arrays");
         var st = new ShardingTest({
             mongos: [{verbose: 5}, {verbose: 4}],
             config: [{verbose: 3}],
-            shards: [{verbose: 2}, {verbose: 1}],
-            other: {shardAsReplicaSet: false}
+            shards: [{verbose: 2}, {verbose: 1}]
         });
 
         var s0 = st.s0;
@@ -61,17 +62,25 @@
         var c0 = st.c0;
         assert.eq(c0, st._configServers[0]);
 
-        var d0 = st.d0;
-        assert.eq(d0, st._connections[0]);
+        var rs0 = st.rs0;
+        assert.eq(rs0, st._rsObjects[0]);
 
-        var d1 = st.d1;
-        assert.eq(d1, st._connections[1]);
+        var rs1 = st.rs1;
+        assert.eq(rs1, st._rsObjects[1]);
+
+        var rs0_d0 = rs0.nodes[0];
+        var rs0_d1 = rs0.nodes[1];
+
+        var rs1_d0 = rs1.nodes[0];
+        var rs1_d1 = rs1.nodes[1];
 
         assert(s0.commandLine.hasOwnProperty("vvvvv"));
         assert(s1.commandLine.hasOwnProperty("vvvv"));
         assert(c0.commandLine.hasOwnProperty("vvv"));
-        assert(d0.commandLine.hasOwnProperty("vv"));
-        assert(d1.commandLine.hasOwnProperty("v"));
+        assert(rs0_d0.commandLine.hasOwnProperty("vv"));
+        assert(rs0_d1.commandLine.hasOwnProperty("vv"));
+        assert(rs1_d0.commandLine.hasOwnProperty("v"));
+        assert(rs1_d1.commandLine.hasOwnProperty("v"));
 
         st.stop();
     }
