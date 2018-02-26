@@ -10,7 +10,6 @@ var st = new ShardingTest({
         chunkSize: 1,
         enableAutoSplit: true,
         shardOptions: {moveParanoia: ""},
-        shardAsReplicaSet: false
     }
 });
 
