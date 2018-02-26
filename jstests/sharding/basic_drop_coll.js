@@ -29,8 +29,8 @@
     assert.writeOK(testDB.user.insert({_id: 10}));
     assert.writeOK(testDB.user.insert({_id: -10}));
 
-    assert.neq(null, st.rs0.getPrimary().getDB('test').user.findOne({_id: -10}));
-    assert.neq(null, st.rs1.getPrimary().getDB('test').user.findOne({_id: 10}));
+    assert.neq(null, st.shard0.getDB('test').user.findOne({_id: -10}));
+    assert.neq(null, st.shard1.getDB('test').user.findOne({_id: 10}));
 
     var configDB = st.s.getDB('config');
     var collDoc = configDB.collections.findOne({_id: 'test.user'});
@@ -41,8 +41,8 @@
 
     assert.commandWorked(testDB.runCommand({drop: 'user'}));
 
-    assert.eq(null, st.rs0.getPrimary().getDB('test').user.findOne());
-    assert.eq(null, st.rs1.getPrimary().getDB('test').user.findOne());
+    assert.eq(null, st.shard0.getDB('test').user.findOne());
+    assert.eq(null, st.shard1.getDB('test').user.findOne());
 
     // Call drop again to verify that the command is idempotent.
     assert.commandWorked(testDB.runCommand({drop: 'user'}));

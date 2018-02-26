@@ -59,7 +59,7 @@
 
     // enable sharding on a collection
     assert.commandWorked(admin.runCommand({enableSharding: "" + collA.getDB()}));
-    st.ensurePrimaryShard("foo", st.shard0.shardName);
+    st.ensurePrimaryShard("foo", "shard0000");
 
     assert.commandWorked(admin.runCommand({shardCollection: "" + collA, key: {_id: 1}}));
 
@@ -70,7 +70,7 @@
     }
 
     // move a chunk
-    assert.commandWorked(admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: conn.name}));
+    assert.commandWorked(admin.runCommand({moveChunk: "foo.bar", find: {_id: 1}, to: "shard0001"}));
 
     // verify the chunk was moved
     admin.runCommand({flushRouterConfig: 1});

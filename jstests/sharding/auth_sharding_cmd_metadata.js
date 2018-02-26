@@ -18,27 +18,27 @@
     st.adminCommand({enableSharding: 'test'});
     st.adminCommand({shardCollection: 'test.user', key: {x: 1}});
 
-    st.shard0.getDB('admin').createUser({user: 'user', pwd: 'pwd', roles: jsTest.adminUserRoles});
-    st.shard0.getDB('admin').auth('user', 'pwd');
+    st.d0.getDB('admin').createUser({user: 'user', pwd: 'pwd', roles: jsTest.adminUserRoles});
+    st.d0.getDB('admin').auth('user', 'pwd');
 
     var maxSecs = Math.pow(2, 32) - 1;
     var metadata = {$configServerState: {opTime: {ts: Timestamp(maxSecs, 0), t: maxSecs}}};
-    var res = st.shard0.getDB('test').runCommandWithMetadata({ping: 1}, metadata);
+    var res = st.d0.getDB('test').runCommandWithMetadata({ping: 1}, metadata);
 
     assert.commandFailedWithCode(res.commandReply, ErrorCodes.Unauthorized);
 
     // Make sure that the config server optime did not advance.
-    var status = st.shard0.getDB('test').runCommand({serverStatus: 1});
+    var status = st.d0.getDB('test').runCommand({serverStatus: 1});
     assert.neq(null, status.sharding);
     assert.lt(status.sharding.lastSeenConfigServerOpTime.t, maxSecs);
 
-    st.shard0.getDB('admin').createUser({user: 'internal', pwd: 'pwd', roles: ['__system']});
-    st.shard0.getDB('admin').auth('internal', 'pwd');
+    st.d0.getDB('admin').createUser({user: 'internal', pwd: 'pwd', roles: ['__system']});
+    st.d0.getDB('admin').auth('internal', 'pwd');
 
-    res = st.shard0.getDB('test').runCommandWithMetadata({ping: 1}, metadata);
+    res = st.d0.getDB('test').runCommandWithMetadata({ping: 1}, metadata);
     assert.commandWorked(res.commandReply);
 
-    status = st.shard0.getDB('test').runCommand({serverStatus: 1});
+    status = st.d0.getDB('test').runCommand({serverStatus: 1});
     assert.neq(null, status.sharding);
     assert.eq(status.sharding.lastSeenConfigServerOpTime.t, maxSecs);
 

@@ -36,7 +36,7 @@ TestData.skipCheckingUUIDsConsistentAcrossCluster = true;
     adminDB.auth('admin', 'password');
 
     adminDB.runCommand({enableSharding: "test"});
-    st.ensurePrimaryShard('test', st.shard1.shardName);
+    st.ensurePrimaryShard('test', 'shard0001');
     adminDB.runCommand({shardCollection: "test.foo", key: {x: 1}});
 
     for (var i = 0; i < 100; i++) {

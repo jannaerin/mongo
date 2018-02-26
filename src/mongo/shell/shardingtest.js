@@ -389,6 +389,7 @@ var ShardingTest = function(params) {
 
         this.stopAllMongos(opts);
 
+
         for (var i = 0; i < this._connections.length; i++) {
             if (this._rs[i]) {
                 this._rs[i].test.stopSet(15, undefined, opts);
@@ -396,6 +397,7 @@ var ShardingTest = function(params) {
                 this.stopMongod(i, opts);
             }
         }
+        
 
         if (this.configRS) {
             this.configRS.stopSet(undefined, undefined, opts);
@@ -724,8 +726,6 @@ var ShardingTest = function(params) {
         if (otherParams.useBridge) {
             MongoRunner.stopMongod(unbridgedConnections[n], undefined, opts);
             this["d" + n].stop();
-        } else if (startShardsAsRS) {
-            this._rs[n].test.stopSet();
         } else {
             MongoRunner.stopMongod(this["d" + n], undefined, opts);
         }
@@ -1135,9 +1135,13 @@ var ShardingTest = function(params) {
             };
 
             if (otherParams.rs || otherParams["rs" + i]) {
-                rsDefaults = Object.merge(rsDefaults, otherParams.rs);
+                if (otherParams.rs) {
+                    rsDefaults = Object.merge(rsDefaults, otherParams.rs);
+                }
+                if (otherParams["rs" + i]) {
+                    rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
+                }
                 rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
-                rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
                 rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
             }
 
@@ -1146,7 +1150,8 @@ var ShardingTest = function(params) {
 
             if (otherParams.rs || otherParams["rs" + i]) {
                 var numReplicas = rsDefaults.nodes || 3;
-            } else {
+            }
+            if (startShardsAsRS) {
                 var numReplicas = 2;
             }
             delete rsDefaults.nodes;
