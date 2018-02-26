@@ -389,7 +389,6 @@ var ShardingTest = function(params) {
 
         this.stopAllMongos(opts);
 
-
         for (var i = 0; i < this._connections.length; i++) {
             if (this._rs[i]) {
                 this._rs[i].test.stopSet(15, undefined, opts);
