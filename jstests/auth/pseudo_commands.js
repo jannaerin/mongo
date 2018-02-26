@@ -114,7 +114,7 @@ function runTest(conn) {
             try {
                 var opid;
                 if (isMongos(db)) {  // opid format different between mongos and mongod
-                    opid = st.shard0.shardName + ":1234";
+                    opid = "shard0000:1234";
                 } else {
                     opid = 1234;
                 }
