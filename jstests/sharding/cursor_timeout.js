@@ -44,7 +44,6 @@
                     clientCursorMonitorFrequencySecs: cursorMonitorFrequencySecs
                 }
             },
-            shardAsReplicaSet: false
         },
         enableBalancer: false
     });
@@ -103,7 +102,7 @@
     // routerCursorWithTimeout is killed for timing out on the shard, and 1 if
     // routerCursorWithTimeout is killed by a killCursors command from the mongos.
     assert.soon(function() {
-        return shardColl.getDB().serverStatus().metrics.cursor.open.total == 2;
+        return shardColl.getDB().serverStatus().metrics.cursor.open.total == 3;
     }, "cursor failed to time out");
 
     assert.throws(function() {

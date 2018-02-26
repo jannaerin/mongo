@@ -1154,6 +1154,8 @@ var ShardingTest = function(params) {
             var protocolVersion = rsDefaults.protocolVersion;
             delete rsDefaults.protocolVersion;
 
+            rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
+
             var rs = new ReplSetTest({
                 name: setName,
                 nodes: numReplicas,
