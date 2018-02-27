@@ -59,7 +59,9 @@
 
     // Restart the primary shard and ensure that it is no longer aware that the collection is
     // sharded.
-    st.rs0.restart(0);
+    for (let n = 0; n < st.rs0.nodeList().length; n++) {
+        st.rs0.restart(n)
+    }
     assert.eq(false, isShardAware(st.rs0.getPrimary(), mongosColl.getFullName()));
 
     const mongos1DB = st.s1.getDB(testName);
@@ -141,7 +143,9 @@
 
     // Restart the primary shard and ensure that it is no longer aware that the collection is
     // sharded.
-    st.rs0.restart(0);
+    for (let n = 0; n < st.rs0.nodeList().length; n++) {
+        st.rs0.restart(n)
+    }
     assert.eq(false, isShardAware(st.rs0.getPrimary(), mongosColl.getFullName()));
 
     // Establish change stream cursor on mongos2 using the resume token from the change steam on
