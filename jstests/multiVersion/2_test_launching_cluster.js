@@ -31,7 +31,7 @@ load('./jstests/multiVersion/libs/verify_versions.js');
             configOptions: {binVersion: versionsToCheckConfig},
             shardOptions: {binVersion: versionsToCheck},
             enableBalancer: true,
-            //shardAsReplicaSet: false
+            shardAsReplicaSet: false
         }
     });
 
