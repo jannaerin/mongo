@@ -3,7 +3,6 @@ var shardOpts = [
     {}  // just use default params
 ];
 
-// TODO: SERVER-33444 remove shardAsReplicaSet: false
 var st = new ShardingTest({shards: shardOpts, other: {nopreallocj: 1}});
 var mongos = st.s;
 
