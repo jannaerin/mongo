@@ -12,6 +12,7 @@ load("./jstests/multiVersion/libs/verify_versions.js");
 (function() {
     "use strict";
 
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-XXXX is fixed.
     var options = {
         shards: [
             {binVersion: "last-stable"},
@@ -20,7 +21,7 @@ load("./jstests/multiVersion/libs/verify_versions.js");
             {binVersion: "latest"}
         ],
         mongos: 1,
-        other: {mongosOptions: {binVersion: "last-stable"}}
+        other: {mongosOptions: {binVersion: "last-stable"}, shardAsReplicaSet: false}
     };
 
     var st = new ShardingTest(options);

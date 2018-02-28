@@ -8,9 +8,11 @@
 
     load("jstests/libs/feature_compatibility_version.js");
 
+    // TODO: Remove 'shardAsReplicaSet: false' when SERVER-XXXX is fixed.
     let st = new ShardingTest({
         shards: [{binVersion: "latest"}, {binVersion: "last-stable"}],
-        mongos: {binVersion: "latest"}
+        mongos: {binVersion: "latest"},
+        other: {shardAsReplicaSet: false}
     });
 
     let testDB = st.s.getDB("test");
