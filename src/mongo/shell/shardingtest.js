@@ -892,14 +892,15 @@ var ShardingTest = function(params) {
         }
 
         this["rs" + n].awaitSecondaryNodes();
-        this._connections[n] = new Mongo(this["rs" + n].getURL());;
+        this._connections[n] = new Mongo(this["rs" + n].getURL());
         this["shard" + n] = this._connections[n];
-    }
+    };
 
     /**
      * Stops and restarts a config server mongod process.
      *
-     * If opts is specified, the new mongod is started using those options. Otherwise, it is started
+     * If opts is specified, the new mongod is started using those options. Otherwise, it is
+     * started
      * with its previous parameters.
      *
      * Warning: Overwrites the old cn/confign member variables.
@@ -1153,8 +1154,8 @@ var ShardingTest = function(params) {
                 shardsvr: '',
                 pathOpts: Object.merge(pathOpts, {shard: i}),
             };
-            
-            if (otherParams.rs || otherParams["rs" +i]) {
+
+            if (otherParams.rs || otherParams["rs" + i]) {
                 if (otherParams.rs) {
                     rsDefaults = Object.merge(rsDefaults, otherParams.rs);
                 }
@@ -1174,7 +1175,7 @@ var ShardingTest = function(params) {
 
             if (otherParams.rs || otherParams["rs" + i]) {
                 var numReplicas = rsDefaults.nodes || 3;
-            } 
+            }
             if (startShardsAsRS) {
                 var numReplicas = 2;
             }
@@ -1221,7 +1222,7 @@ var ShardingTest = function(params) {
                 shardsvr: '',
                 keyFile: keyFile
             };
-            jsTest.log("xxx no rs options "+ tojson(options));
+            jsTest.log("xxx no rs options " + tojson(options));
             if (jsTestOptions().shardMixedBinVersions) {
                 if (!otherParams.shardOptions) {
                     otherParams.shardOptions = {};
@@ -1242,9 +1243,9 @@ var ShardingTest = function(params) {
             }
 
             options = Object.merge(options, otherParams.shardOptions);
-            jsTest.log("xxx no rs options "+ tojson(options));
+            jsTest.log("xxx no rs options " + tojson(options));
             options = Object.merge(options, otherParams["d" + i]);
-            jsTest.log("xxx no rs options "+ tojson(options));
+            jsTest.log("xxx no rs options " + tojson(options));
 
             options.port = options.port || allocatePort();
 

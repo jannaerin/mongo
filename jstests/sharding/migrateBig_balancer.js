@@ -11,7 +11,7 @@
     var st = new ShardingTest({
         name: 'migrateBig_balancer',
         shards: 2,
-        other: {enableBalancer: true/*, shardAsReplicaSet: false*/}
+        other: {enableBalancer: true /*, shardAsReplicaSet: false*/}
     });
     var mongos = st.s;
     jsTestLog("xxx migrate big balancer");
@@ -60,7 +60,7 @@
             initial: {nChunks: 0}
         });
         jsTestLog("xxxx idk");
-        //printjson(res);
+        // printjson(res);
         return res.length > 1 && Math.abs(res[0].nChunks - res[1].nChunks) <= 3;
 
     }, "never migrated", 10 * 60 * 1000, 1000);

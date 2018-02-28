@@ -6,8 +6,7 @@
     'use strict';
 
     // TODO: SERVER-33444 remove shardAsReplicaSet: false
-    var st = new ShardingTest(
-        {name: "write_commands", mongos: 2, shards: 2});
+    var st = new ShardingTest({name: "write_commands", mongos: 2, shards: 2});
 
     var dbTestName = 'WriteCommandsTestDB';
     var collName = dbTestName + '.TestColl';
@@ -48,7 +47,8 @@
     assert.eq(1, st.shard1.getDB(dbTestName).TestColl.find({Key: 11}).count());
     assert.eq(1, st.shard1.getDB(dbTestName).TestColl.find({Key: 21}).count());
 
-    // Move chunk [0, 19] to st.sharshard0.shardName and make sure the documents are correctly placed
+    // Move chunk [0, 19] to st.sharshard0.shardName and make sure the documents are correctly
+    // placed
     assert.commandWorked(st.s0.adminCommand(
         {moveChunk: collName, find: {Key: 19}, _waitForDelete: true, to: st.shard0.shardName}));
 
@@ -63,7 +63,8 @@
     // Now that both mongod shards are restarted, they don't know yet that they are part of a
     // sharded
     // cluster until they get a setShardVerion command. Mongos instance s1 has stale metadata and
-    // doesn't know that chunk with key 19 has moved to st.sharshard0.shardName so it will send it to
+    // doesn't know that chunk with key 19 has moved to st.sharshard0.shardName so it will send it
+    // to
     // st.sharshard1.shardName at
     // first.
     //
