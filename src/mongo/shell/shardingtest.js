@@ -724,8 +724,6 @@ var ShardingTest = function(params) {
         if (otherParams.useBridge) {
             MongoRunner.stopMongod(unbridgedConnections[n], undefined, opts);
             this["d" + n].stop();
-        } else if (startShardsAsRS) {
-            this._rs[n].test.stopSet();
         } else {
             MongoRunner.stopMongod(this["d" + n], undefined, opts);
         }
@@ -1164,7 +1162,6 @@ var ShardingTest = function(params) {
             }
             if (startShardsAsRS) {
                 rsDefaults = Object.merge(rsDefaults, otherParams["d" + i]);
-                rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
                 rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
             }
 
