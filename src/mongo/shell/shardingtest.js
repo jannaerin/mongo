@@ -1153,19 +1153,21 @@ var ShardingTest = function(params) {
                 shardsvr: '',
                 pathOpts: Object.merge(pathOpts, {shard: i}),
             };
-
-            if (otherParams.rs) {
-                rsDefaults = Object.merge(rsDefaults, otherParams.rs);
-            }
-            if (otherParams["rs" + i]) {
-                rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
+            
+            if (otherParams.rs || otherParams["rs" +i]) {
+                if (otherParams.rs) {
+                    rsDefaults = Object.merge(rsDefaults, otherParams.rs);
+                }
+                if (otherParams["rs" + i]) {
+                    rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
+                }
+                rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
+                rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
             }
             if (startShardsAsRS) {
                 rsDefaults = Object.merge(rsDefaults, otherParams["d" + i]);
                 rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
             }
-            rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
-            rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
 
             var rsSettings = rsDefaults.settings;
             delete rsDefaults.settings;
