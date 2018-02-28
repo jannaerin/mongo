@@ -1154,23 +1154,26 @@ var ShardingTest = function(params) {
                 pathOpts: Object.merge(pathOpts, {shard: i}),
             };
 
-            if (otherParams.rs || otherParams["rs" + i]) {
+            if (otherParams.rs) {
                 rsDefaults = Object.merge(rsDefaults, otherParams.rs);
-                rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
+            }
+            if (otherParams["rs" + i]) {
                 rsDefaults = Object.merge(rsDefaults, otherParams["rs" + i]);
-                rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
             }
             if (startShardsAsRS) {
                 rsDefaults = Object.merge(rsDefaults, otherParams["d" + i]);
                 rsDefaults = Object.merge(rsDefaults, otherParams.shardOptions);
             }
+            rsDefaults = Object.merge(rsDefaults, otherParams.rsOptions);
+            rsDefaults.nodes = rsDefaults.nodes || otherParams.numReplicas;
 
             var rsSettings = rsDefaults.settings;
             delete rsDefaults.settings;
 
             if (otherParams.rs || otherParams["rs" + i]) {
                 var numReplicas = rsDefaults.nodes || 3;
-            } else {
+            } 
+            if (startShardsAsRS) {
                 var numReplicas = 2;
             }
             delete rsDefaults.nodes;
