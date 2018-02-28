@@ -57,38 +57,8 @@
     printjson(st.shard1.getDB(dbTestName).TestColl.find({}).toArray());
 
     // Now restart all mongod instances, so they don't know yet that they are sharded
-    //st.restartMongod(0);
-    //st.restartMongod(1);
-    for (let n = 0; n < st.rs0.nodeList().length; n++) {
-        st.rs0.restart(n)
-    }
-    st.rs0.awaitSecondaryNodes();
-
-    st._rsObjects[0] = st.rs0;
-    //var rsConn = new Mongo(st.rs0.getURL());
-    //rsConn.name = st.rs0.getURL();
-    //jsTest.log("xxx connect is " + st._connections[0]);
-    //st._connections[0] = rsConn;
-    //jsTest.log("xxx now is " + st._connections[0]);
-    jsTest.log("xxx shard0 is " + st.shard0);
-    st.shard0 = st.rs0.getURL();
-    jsTest.log("xxx shard0 is " + st.shard0);
-    rsConn.rs = st.rs0;
-
-    for (let n = 0; n < st.rs1.nodeList().length; n++) {
-        st.rs1.restart(n)
-    }
-    st.rs1.awaitSecondaryNodes();
-    st._rsObjects[1] = st.rs1;
-    var rsConn = new Mongo(st.rs1.getURL());
-    jsTest.log("xxx connect is " + st._connections[1]);
-    rsConn.name = st.rs1.getURL();
-    jsTest.log("xxx now is " + st._connections[1]);
-    jsTest.log("xxx shard1 is " + st.shard1);
-    st._connections[1] = rsConn;
-    jsTest.log("xxx shard1 is " + st.shard1);
-    st.shard1 = rsConn;
-    rsConn.rs = st.rs1;
+    st.restartShardRS(0);
+    st.restartShardRS(1);
 
     // Now that both mongod shards are restarted, they don't know yet that they are part of a
     // sharded

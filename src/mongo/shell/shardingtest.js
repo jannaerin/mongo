@@ -878,6 +878,27 @@ var ShardingTest = function(params) {
     };
 
     /**
+     * Restarts each node in a particular shard replica set using the shard's original startup
+     * options by default.
+     *
+     * Option { startClean : true } forces clearing the data directory.
+     * Option { auth : Object } object that contains the auth details for admin credentials.
+     *   Should contain the fields 'user' and 'pwd'
+     *
+     *
+     * @param {int} shard server number (0, 1, 2, ...) to be restarted
+     */
+    this.restartShardRS = function(n, options, signal, wait) {
+        for (let i = 0; i < this["rs" + n].nodeList().length; i++) {
+            this["rs" + n].restart(i);
+        }
+
+        this["rs" + n].awaitSecondaryNodes();
+        this._connections[n] = new Mongo(this["rs" + n].getURL());;
+        this["shard" + n] = this._connections[n];
+    }
+
+    /**
      * Stops and restarts a config server mongod process.
      *
      * If opts is specified, the new mongod is started using those options. Otherwise, it is started
