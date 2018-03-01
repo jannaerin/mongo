@@ -30,8 +30,8 @@ load('./jstests/multiVersion/libs/verify_versions.js');
             mongosOptions: {binVersion: versionsToCheckMongos},
             configOptions: {binVersion: versionsToCheckConfig},
             shardOptions: {binVersion: versionsToCheck},
-            enableBalancer: true//,
-            //shardAsReplicaSet: false
+            enableBalancer: true  //,
+            // shardAsReplicaSet: false
         }
     });
 

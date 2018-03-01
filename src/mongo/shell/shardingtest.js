@@ -1170,7 +1170,8 @@ var ShardingTest = function(params) {
                     if (!otherParams.shardOptions) {
                         otherParams.shardOptions = {};
                     }
-                    // If the test doesn't depend on specific shard binVersions, create a mixed version
+                    // If the test doesn't depend on specific shard binVersions, create a mixed
+                    // version
                     // shard cluster that randomly assigns shard binVersions, half "latest" and half
                     // "last-stable".
                     if (!otherParams.shardOptions.binVersion) {
