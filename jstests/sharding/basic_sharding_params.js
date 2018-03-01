@@ -46,7 +46,6 @@
     }
 
     function shardingTestUsingArrays() {
-
         var st = new ShardingTest({
             mongos: [{verbose: 5}, {verbose: 4}],
             config: [{verbose: 3}],
