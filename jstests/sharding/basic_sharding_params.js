@@ -12,7 +12,7 @@
             config: {c0: {verbose: 4}},
             shards: {d0: {verbose: 3}, rs1: {nodes: {d0: {verbose: 2}, a1: {verbose: 1}}}}
         });
-        jsTest.log("xxxx objects");
+
         var s0 = st.s0;
         assert.eq(s0, st._mongos[0]);
 
@@ -46,7 +46,7 @@
     }
 
     function shardingTestUsingArrays() {
-        jsTest.log("xxxx arrays");
+
         var st = new ShardingTest({
             mongos: [{verbose: 5}, {verbose: 4}],
             config: [{verbose: 3}],
