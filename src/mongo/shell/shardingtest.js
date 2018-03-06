@@ -1146,10 +1146,11 @@ var ShardingTest = function(params) {
             var rsSettings = rsDefaults.settings;
             delete rsDefaults.settings;
 
+            // If both rs and startShardsAsRS are specfied, the number of nodes 
+            // in the rs field should take priority. 
             if (otherParams.rs || otherParams["rs" + i]) {
                 var numReplicas = rsDefaults.nodes || 3;
-            }
-            if (startShardsAsRS) {
+            } else if (startShardsAsRS) {
                 var numReplicas = 2;
             }
             delete rsDefaults.nodes;
