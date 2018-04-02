@@ -46,11 +46,15 @@ const NamespaceString ShardDatabaseType::ConfigNS(
 
 const BSONField<std::string> ShardDatabaseType::name("_id");
 const BSONField<DatabaseVersion> ShardDatabaseType::version("version");
+const BSONField<std::string> ShardDatabaseType::primary("primary");
+const BSONField<bool> ShardDatabaseType::partitioned("partitioned");
 const BSONField<int> ShardDatabaseType::enterCriticalSectionCounter("enterCriticalSectionCounter");
 
-ShardDatabaseType::ShardDatabaseType(const std::string& dbName,
-                                     boost::optional<DatabaseVersion> version)
-    : _name(dbName), _version(version) {}
+ShardDatabaseType::ShardDatabaseType(const std::string dbName,
+                                     boost::optional<DatabaseVersion> version,
+                                     const ShardId primary,
+                                     bool partitioned)
+    : _name(dbName), _version(version), _primary(primary), _partitioned(partitioned) {}
 
 StatusWith<ShardDatabaseType> ShardDatabaseType::fromBSON(const BSONObj& source) {
     std::string dbName;
@@ -70,7 +74,22 @@ StatusWith<ShardDatabaseType> ShardDatabaseType::fromBSON(const BSONObj& source)
         }
     }
 
-    ShardDatabaseType shardDatabaseType(dbName, dbVersion);
+    std::string dbPrimary;
+    {
+        Status status = bsonExtractStringField(source, primary.name(), &dbPrimary);
+        if (!status.isOK())
+            return status;
+    }
+
+    bool dbPartitioned;
+    {
+        Status status =
+            bsonExtractBooleanFieldWithDefault(source, partitioned.name(), false, &dbPartitioned);
+        if (!status.isOK())
+            return status;
+    }
+
+    ShardDatabaseType shardDatabaseType(dbName, dbVersion, dbPrimary, dbPartitioned);
 
 
     return shardDatabaseType;
@@ -83,7 +102,8 @@ BSONObj ShardDatabaseType::toBSON() const {
     if (_version) {
         builder.append(version.name(), _version->toBSON());
     }
-
+    builder.append(primary.name(), _primary.toString());
+    builder.append(partitioned.name(), _partitioned);
 
     return builder.obj();
 }
@@ -92,13 +112,22 @@ std::string ShardDatabaseType::toString() const {
     return toBSON().toString();
 }
 
-void ShardDatabaseType::setDbVersion(DatabaseVersion version) {
+void ShardDatabaseType::setDbVersion(boost::optional<DatabaseVersion> version) {
     _version = version;
 }
 
 void ShardDatabaseType::setDbName(const std::string& dbName) {
     invariant(!dbName.empty());
     _name = dbName;
+}
+
+void ShardDatabaseType::setPrimary(const ShardId& primary) {
+    invariant(primary.isValid());
+    _primary = primary;
+}
+
+void ShardDatabaseType::setPartitioned(bool partitioned) {
+    _partitioned = partitioned;
 }
 
 }  // namespace mongo

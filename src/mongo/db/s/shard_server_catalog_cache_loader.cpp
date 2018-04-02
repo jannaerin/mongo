@@ -121,19 +121,14 @@ Status persistCollectionAndChangedChunks(OperationContext* opCtx,
 }
 
 /**
- * Takes a CollectionAndChangedChunks object and persists the changes to the shard's metadata
+ * Takes a DatabaseType object and persists the changes to the shard's metadata
  * collections.
- *
- * Returns ConflictingOperationInProgress if a chunk is found with a new epoch.
  */
-Status persistDbVersion(OperationContext* opCtx,
-                        StringData dbName,
-                        boost::optional<DatabaseVersion> version) {
+Status persistDbVersion(OperationContext* opCtx, const DatabaseType& dbt) {
     // Update the databases collection entry for 'dbName' in case there are any new updates.
-    ShardDatabaseType update = ShardDatabaseType(dbName.toString(), version);
     Status status = updateShardDatabasesEntry(opCtx,
-                                              BSON(ShardDatabaseType::name() << dbName.toString()),
-                                              update.toBSON(),
+                                              BSON(ShardDatabaseType::name() << dbt.getName()),
+                                              dbt.toBSON(),
                                               BSONObj(),
                                               true /*upsert*/);
     if (!status.isOK()) {
@@ -665,8 +660,9 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
 
     auto remoteRefreshCallbackFn = [this, dbName, maxLoaderVersion, termScheduled, callbackFn](
         OperationContext* opCtx, StatusWith<DatabaseType> swDatabaseType) {
+        log() << "XXX I SHOULDNT BE IN HERE";
         if (swDatabaseType == ErrorCodes::NamespaceNotFound) {
-            // The namespace was dropped. The persisted metadata for the database must be cleared.
+            // The database was dropped. The persisted metadata for the database must be cleared.
             uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
                                        str::stream()
                                            << "Unable to schedule routing table update because "
@@ -689,7 +685,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
                                                   "this is not the majority primary and "
                                                   "may not have the latest data.");
 
-                uassertStatusOKWithContext(persistDbVersion(opCtx, dbName, dbType.getVersion()),
+                uassertStatusOKWithContext(persistDbVersion(opCtx, dbType),
                                            str::stream()
                                                << "Failed to update the persisted metadata for db '"
                                                << dbName.toString()

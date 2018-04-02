@@ -161,6 +161,8 @@ selector:
   # Calls movePrimary after data has been inserted into an unsharded collection, so will fail if
   # a stepdown causes the command to be sent again.
   - jstests/sharding/move_primary_clone_test.js
+  # Blacklist until DB version refresh is fully finished.
+  - jstests/sharding/check_db_version_persisted.js
 
 executor:
   config:
