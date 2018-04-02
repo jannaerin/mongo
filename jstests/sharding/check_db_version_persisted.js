@@ -21,6 +21,7 @@
 
     // Check that the db version is persisted on the shard.
     const cacheDbEntry = st.shard0.getDB("config").cache.databases.findOne({_id: db});
+    jsTestLog(tojson(cacheDbEntry));
     assert.neq(undefined, cacheDbEntry);
     assert.neq(undefined, cacheDbEntry.version);
     assert.neq(undefined, cacheDbEntry.version.uuid);
