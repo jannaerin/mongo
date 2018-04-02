@@ -661,7 +661,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
 
     auto remoteRefreshCallbackFn = [this, dbName, maxLoaderVersion, termScheduled, callbackFn](
         OperationContext* opCtx, StatusWith<DatabaseType> swDatabaseType) {
-        log() << "XXX I SHOULDNT BE IN HERE";
+
         if (swDatabaseType == ErrorCodes::NamespaceNotFound) {
 
             Status scheduleStatus = _ensureMajorityPrimaryAndScheduleDbTask(
@@ -1006,7 +1006,7 @@ void ShardServerCatalogCacheLoader::_updatePersistedDbMetadata(OperationContext*
 
     // Check if this is a drop task
     if (task.dropped) {
-        // The namespace was dropped. The persisted metadata for the collection must be cleared.
+        // The database was dropped. The persisted metadata for the collection must be cleared.
         uassertStatusOKWithContext(deleteDatabasesEntry(opCtx, dbName),
                                    str::stream() << "Failed to clear persisted metadata for db '"
                                                  << dbName.toString()
@@ -1014,7 +1014,7 @@ void ShardServerCatalogCacheLoader::_updatePersistedDbMetadata(OperationContext*
         return;
     }
 
-    uassertStatusOKWithContext(persistDbVersion(opCtx, dbName, task.maxVersion),
+    uassertStatusOKWithContext(persistDbVersion(opCtx, task.databaseType.get()),
                                str::stream() << "Failed to update the persisted metadata for db '"
                                              << dbName.toString()
                                              << "'. Will be retried.");
