@@ -116,6 +116,7 @@ env.Library(
         'catalog/type_mongos.cpp',
         'catalog/type_shard.cpp',
         'catalog/type_shard_collection.cpp',
+        'catalog/type_shard_database.cpp',
         'catalog/type_tags.cpp',
         'chunk_version.cpp',
         'request_types/add_shard_request_type.cpp',
@@ -339,15 +340,15 @@ env.Library(
     ],
 )
 
-env.Benchmark(
-    target='chunk_manager_refresh_bm',
-    source=[
-        'chunk_manager_refresh_bm.cpp',
-    ],
-    LIBDEPS=[
-        'sharding_routing_table',
-        '$BUILD_DIR/mongo/db/s/sharding_api_d',
-    ],
+env.Benchmark(	
+	target='chunk_manager_refresh_bm',	
+	source=[	
+		'chunk_manager_refresh_bm.cpp',	
+     ],	
+     LIBDEPS=[	
+         'sharding_routing_table',	
+         '$BUILD_DIR/mongo/db/s/sharding_api_d',	
+     ],	
 )
 
 env.CppUnitTest(

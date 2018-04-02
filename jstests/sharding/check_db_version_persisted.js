@@ -13,21 +13,18 @@
     assert.commandWorked(st.s.adminCommand({enableSharding: db}));
     st.ensurePrimaryShard(db, st.shard0.shardName);
 
-    assert.commandWorked(st.s.adminCommand({shardCollection: nss, key: {_id: 1}}));
-
-    assert.commandWorked(st.s.getDB("admin").runCommand(
+    assert.commandWorked(st.shard0.getDB("admin").runCommand(
         {configureFailPoint: 'callShardServerCallbackFn', mode: 'alwaysOn'}));
 
+    assert.commandWorked(st.s.adminCommand({shardCollection: nss, key: {_id: 1}}));
     assert.writeOK(st.s.getDB(db).getCollection(coll).insert({x: 1}));
 
-    // Check that the version is persisted on the shard.
-    /*const cacheDbEntry =
-        st.shard0.getDB("config").cache.databases.findOne({_id: db});
-    assert.commandWorked(cacheDbEntry);
+    // Check that the db version is persisted on the shard.
+    const cacheDbEntry = st.shard0.getDB("config").cache.databases.findOne({_id: db});
     assert.neq(undefined, cacheDbEntry);
     assert.neq(undefined, cacheDbEntry.version);
     assert.neq(undefined, cacheDbEntry.version.uuid);
-    assert.neq(undefined, cacheDbEntry.version.lastMod);*/
+    assert.neq(undefined, cacheDbEntry.version.lastMod);
 
     st.stop();
 })();
