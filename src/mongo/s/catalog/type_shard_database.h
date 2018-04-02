@@ -33,10 +33,10 @@
 
 #include "mongo/db/jsobj.h"
 #include "mongo/s/database_version_gen.h"
+#include "mongo/s/shard_id.h"
 
 namespace mongo {
 
-// class DatabaseType;
 class Status;
 template <typename T>
 class StatusWith;
@@ -46,13 +46,15 @@ class StatusWith;
  * config.databases collection. All manipulation of documents coming from that collection should
  * be done with this class.
  *
- * Expected shard server config.collections collection format:
+ * Expected shard server config.databases collection format:
  *   {
  *      "_id" : "foo",
  *      "version" : {
  *          "uuid" : UUID
  *          "lastMod" : 1
  *      },
+ *      "primary": "shard0000",
+ *      "partitioned": true,
  *      "enterCriticalSectionCounter" : 4                    // optional
  *   }
  *
@@ -65,9 +67,14 @@ public:
 
     static const BSONField<std::string> name;  // "_id"
     static const BSONField<DatabaseVersion> version;
+    static const BSONField<std::string> primary;
+    static const BSONField<bool> partitioned;
     static const BSONField<int> enterCriticalSectionCounter;
 
-    ShardDatabaseType(const std::string& dbName, boost::optional<DatabaseVersion> version);
+    ShardDatabaseType(const std::string dbName,
+                      boost::optional<DatabaseVersion> version,
+                      const ShardId primary,
+                      bool partitioned);
 
     /**
      * Constructs a new ShardDatabaseType object from BSON. Also does validation of the contents.
@@ -92,11 +99,23 @@ public:
     const boost::optional<DatabaseVersion> getDbVersion() const {
         return _version;
     }
-    void setDbVersion(DatabaseVersion version);
+    void setDbVersion(boost::optional<DatabaseVersion> version);
+
+    const ShardId& getPrimary() const {
+        return _primary;
+    }
+    void setPrimary(const ShardId& primary);
+
+    bool getPartitioned() const {
+        return _partitioned;
+    }
+    void setPartitioned(bool partitioned);
 
 private:
     std::string _name;
     boost::optional<DatabaseVersion> _version;
+    ShardId _primary;
+    bool _partitioned;
 };
 
 }  // namespace mongo

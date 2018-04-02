@@ -25,6 +25,8 @@
     assert.neq(undefined, cacheDbEntry.version);
     assert.neq(undefined, cacheDbEntry.version.uuid);
     assert.neq(undefined, cacheDbEntry.version.lastMod);
+    assert.neq(undefined, cacheDbEntry.primary);
+    assert.neq(undefined, cacheDbEntry.partitioned);
 
     st.stop();
 })();
