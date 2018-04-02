@@ -243,6 +243,15 @@ CollectionAndChangedChunks getPersistedMetadataSinceVersion(OperationContext* op
                                       std::move(changedChunks)};
 }
 
+DatabaseType getPersistedDbVersion(OperationContext* opCtx, StringData dbName) {
+    ShardDatabaseType shardDatabaseEntry =
+        uassertStatusOK(readShardDatabasesEntry(opCtx, dbName));
+
+    DatabaseType dbt(shardDatabaseEntry.getDbName(), shardDatabaseEntry.getPrimary(), shardDatabaseEntry.getPartitioned(), shardDatabaseEntry.getDbVersion());
+
+    return dbt;
+}
+
 /**
  * Attempts to read the collection and chunk metadata. May not read a complete diff if the metadata
  * for the collection is being updated concurrently. This is safe if those updates are appended.
@@ -298,6 +307,31 @@ void forcePrimaryRefreshAndWaitForReplication(OperationContext* opCtx, const Nam
         ReadPreferenceSetting{ReadPreference::PrimaryOnly},
         "admin",
         BSON("forceRoutingTableRefresh" << nss.ns()),
+        Seconds{30},
+        Shard::RetryPolicy::kIdempotent));
+
+    uassertStatusOK(cmdResponse.commandStatus);
+
+    uassertStatusOK(repl::ReplicationCoordinator::get(opCtx)->waitUntilOpTimeForRead(
+        opCtx, {LogicalTime::fromOperationTime(cmdResponse.response), boost::none}));
+}
+
+/**
+ * Sends _flushDatabaseCacheUpdates to the primary to force it to refresh its routing table for
+ * database 'dbName' and then waits for the refresh to replicate to this node.
+ */
+void forcePrimaryRefreshDbVersionAndWaitForReplication(OperationContext* opCtx, StringData dbName) {
+    auto const shardingState = ShardingState::get(opCtx);
+    invariant(shardingState->enabled());
+
+    auto selfShard = uassertStatusOK(
+        Grid::get(opCtx)->shardRegistry()->getShard(opCtx, shardingState->getShardName()));
+
+    auto cmdResponse = uassertStatusOK(selfShard->runCommandWithFixedRetryAttempts(
+        opCtx,
+        ReadPreferenceSetting{ReadPreference::PrimaryOnly},
+        "admin",
+        BSON("forceDatabaseRefresh" << dbName),
         Seconds{30},
         Shard::RetryPolicy::kIdempotent));
 
@@ -462,6 +496,8 @@ void ShardServerCatalogCacheLoader::getDatabase(
             try {
                 if (isPrimary) {
                     _schedulePrimaryGetDatabase(context.opCtx(), dbName, currentTerm, callbackFn);
+                }  else {
+                    _runSecondaryGetDatabase(context.opCtx(), dbName, callbackFn);
                 }
             } catch (const DBException& ex) {
                 callbackFn(context.opCtx(), ex.toStatus());
@@ -635,6 +671,18 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
     // Refresh the loader's metadata from the config server. The caller's request will
     // then be serviced from the loader's up-to-date metadata.
     _configServerLoader->getChunksSince(nss, maxLoaderVersion, remoteRefreshCallbackFn);
+}
+
+void ShardServerCatalogCacheLoader::_runSecondaryGetDatabase(
+    OperationContext* opCtx,
+    StringData dbName,
+    stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
+    forcePrimaryRefreshDbVersionAndWaitForReplication(opCtx, dbName);
+
+    // Read the local metadata.
+    auto swDatabaseType =
+        getPersistedDbVersion(opCtx, dbName);
+    callbackFn(opCtx, std::move(swDatabaseType));
 }
 
 void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(

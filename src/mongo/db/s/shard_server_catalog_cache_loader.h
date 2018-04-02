@@ -401,6 +401,17 @@ private:
         std::shared_ptr<Notification<void>> notify);
 
     /**
+     * Forces the primary to refresh its metadata for 'dbName' and waits until this node's metadata
+     * has caught up to the primary's.
+     * Then retrieves the db version from this node's persisted metadata store and passes it to
+     * 'callbackFn'.
+     */
+    void _runSecondaryGetDatabase(
+    OperationContext* opCtx,
+    StringData dbName,
+    stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn);
+
+    /**
      * Refreshes db version from the config server's metadata store, and schedules maintenance
      * of the shard's persisted metadata store with the latest updates retrieved from the config
      * server.
