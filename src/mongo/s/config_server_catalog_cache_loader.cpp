@@ -203,10 +203,18 @@ void ConfigServerCatalogCacheLoader::getDatabase(
         uassertStatusOK(_threadPool.schedule([ dbName, callbackFn ]() noexcept {
             auto opCtx = Client::getCurrent()->makeOperationContext();
 
-            const auto dbVersion = Versioning::newDatabaseVersion();
-            DatabaseType dbt(dbName.toString(), ShardId("PrimaryShard"), false, dbVersion);
+            auto swDbt = [&]() -> StatusWith<DatabaseType> {
+                try {
 
-            callbackFn(opCtx.get(), dbt);
+                    const auto dbVersion = Versioning::newDatabaseVersion();
+                    DatabaseType dbt(dbName.toString(), ShardId("PrimaryShard"), false, dbVersion);
+                    return dbt;
+                } catch (const DBException& ex) {
+                    return ex.toStatus();
+                }
+            }();
+
+            callbackFn(opCtx.get(), swDbt);
         }));
     }
 }

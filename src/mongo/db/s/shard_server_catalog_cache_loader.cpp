@@ -40,6 +40,7 @@
 #include "mongo/db/s/shard_metadata_util.h"
 #include "mongo/db/s/sharding_state.h"
 #include "mongo/s/catalog/type_shard_collection.h"
+#include "mongo/s/catalog/type_shard_database.h"
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/grid.h"
 #include "mongo/stdx/memory.h"
@@ -120,6 +121,29 @@ Status persistCollectionAndChangedChunks(OperationContext* opCtx,
 }
 
 /**
+ * Takes a CollectionAndChangedChunks object and persists the changes to the shard's metadata
+ * collections.
+ *
+ * Returns ConflictingOperationInProgress if a chunk is found with a new epoch.
+ */
+Status persistDbVersion(OperationContext* opCtx,
+                        StringData dbName,
+                        boost::optional<DatabaseVersion> version) {
+    // Update the databases collection entry for 'dbName' in case there are any new updates.
+    ShardDatabaseType update = ShardDatabaseType(dbName.toString(), version);
+    Status status = updateShardDatabasesEntry(opCtx,
+                                              BSON(ShardDatabaseType::name() << dbName.toString()),
+                                              update.toBSON(),
+                                              BSONObj(),
+                                              true /*upsert*/);
+    if (!status.isOK()) {
+        return status;
+    }
+
+    return Status::OK();
+}
+
+/**
  * This function will throw on error!
  *
  * Retrieves the persisted max chunk version for 'nss', if there are any persisted chunks. If there
@@ -130,7 +154,7 @@ Status persistCollectionAndChangedChunks(OperationContext* opCtx,
  * could be dropped and recreated between reading the collection epoch and retrieving the chunk,
  * which would make the returned ChunkVersion corrupt.
  */
-ChunkVersion getPersistedMaxVersion(OperationContext* opCtx, const NamespaceString& nss) {
+ChunkVersion getPersistedMaxChunkVersion(OperationContext* opCtx, const NamespaceString& nss) {
     // Must read the collections entry to get the epoch to pass into ChunkType for shard's chunk
     // collection.
     auto statusWithCollection = readShardCollectionsEntry(opCtx, nss);
@@ -163,6 +187,30 @@ ChunkVersion getPersistedMaxVersion(OperationContext* opCtx, const NamespaceStri
 
     return statusWithChunk.getValue().empty() ? ChunkVersion::UNSHARDED()
                                               : statusWithChunk.getValue().front().getVersion();
+}
+
+/**
+ * This function will throw on error!
+ *
+ * Retrieves the persisted max db version for 'dbName', if there are any persisted dbs. If there
+ * are none -- meaning there's no persisted metadata for 'dbName' --, returns boost::optional.
+ */
+boost::optional<DatabaseVersion> getPersistedMaxDbVersion(OperationContext* opCtx,
+                                                          StringData dbName) {
+
+    auto statusWithDatabaseEntry = readShardDatabasesEntry(opCtx, dbName);
+    if (statusWithDatabaseEntry == ErrorCodes::NamespaceNotFound) {
+        // There is no persisted metadata.
+        return boost::none;
+    }
+    uassert(ErrorCodes::OperationFailed,
+            str::stream() << "Failed to read persisted database entry for db '" << dbName.toString()
+                          << "' due to '"
+                          << statusWithDatabaseEntry.getStatus().toString()
+                          << "'.",
+            statusWithDatabaseEntry.isOK());
+
+    return statusWithDatabaseEntry.getValue().getDbVersion();
 }
 
 /**
@@ -426,18 +474,6 @@ void ShardServerCatalogCacheLoader::getDatabase(
         }));
 }
 
-void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
-    OperationContext* opCtx,
-    StringData dbName,
-    long long termScheduled,
-    stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
-
-    auto remoteRefreshCallbackFn = [](OperationContext* opCtx,
-                                      StatusWith<DatabaseType> swDatabaseType) {};
-
-    _configServerLoader->getDatabase(dbName, remoteRefreshCallbackFn);
-}
-
 void ShardServerCatalogCacheLoader::waitForCollectionFlush(OperationContext* opCtx,
                                                            const NamespaceString& nss) {
     stdx::unique_lock<stdx::mutex> lg(_mutex);
@@ -536,7 +572,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
         }
 
         // If there are no enqueued tasks, get the max persisted
-        return getPersistedMaxVersion(opCtx, nss);
+        return getPersistedMaxChunkVersion(opCtx, nss);
     }();
 
     auto remoteRefreshCallbackFn = [this,
@@ -614,6 +650,60 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
     // Refresh the loader's metadata from the config server. The caller's request will
     // then be serviced from the loader's up-to-date metadata.
     _configServerLoader->getChunksSince(nss, maxLoaderVersion, remoteRefreshCallbackFn);
+}
+
+void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
+    OperationContext* opCtx,
+    StringData dbName,
+    long long termScheduled,
+    stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
+
+    // Get the max version the loader has.
+    boost::optional<DatabaseVersion> maxLoaderVersion = [&] {
+        return getPersistedMaxDbVersion(opCtx, dbName);
+    }();
+
+    auto remoteRefreshCallbackFn = [this, dbName, maxLoaderVersion, termScheduled, callbackFn](
+        OperationContext* opCtx, StatusWith<DatabaseType> swDatabaseType) {
+        if (swDatabaseType == ErrorCodes::NamespaceNotFound) {
+            // The namespace was dropped. The persisted metadata for the database must be cleared.
+            uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
+                                       str::stream()
+                                           << "Unable to schedule routing table update because "
+                                              "this is not the majority primary and "
+                                              "may not have the latest data.");
+
+            uassertStatusOKWithContext(
+                deleteDatabasesEntry(opCtx, dbName),
+                str::stream() << "Failed to clear persisted metadata for db '" << dbName.toString()
+                              << "'. Will be retried.");
+
+        } else if (swDatabaseType.isOK()) {
+            auto& dbType = swDatabaseType.getValue();
+
+            if (!bool(maxLoaderVersion) ||
+                (bool(maxLoaderVersion) && (dbType.getVersion() > maxLoaderVersion.get()))) {
+                uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
+                                           str::stream()
+                                               << "Unable to schedule routing table update because "
+                                                  "this is not the majority primary and "
+                                                  "may not have the latest data.");
+
+                uassertStatusOKWithContext(persistDbVersion(opCtx, dbName, dbType.getVersion()),
+                                           str::stream()
+                                               << "Failed to update the persisted metadata for db '"
+                                               << dbName.toString()
+                                               << "'. Will be retried.");
+            }
+
+            log() << "Cache loader remotely refreshed for database " << dbName.toString();
+        }
+
+        // Complete the callbackFn work.
+        callbackFn(opCtx, std::move(swDatabaseType));
+    };
+
+    _configServerLoader->getDatabase(dbName, remoteRefreshCallbackFn);
 }
 
 StatusWith<CollectionAndChangedChunks> ShardServerCatalogCacheLoader::_getLoaderMetadata(

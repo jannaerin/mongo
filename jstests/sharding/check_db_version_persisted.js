@@ -22,14 +22,12 @@
     assert.commandWorked(
         st.rs0.getPrimary().getDB('admin').runCommand({_flushDatabaseCacheUpdates: db}));
 
-    // Check that the version is persisted on the shard.
-    /*const cacheDbEntry =
-        st.shard0.getDB("config").cache.databases.findOne({_id: db});
-    assert.commandWorked(cacheDbEntry);
+    // Check that the db version is persisted on the shard.
+    const cacheDbEntry = st.shard0.getDB("config").cache.databases.findOne({_id: db});
     assert.neq(undefined, cacheDbEntry);
     assert.neq(undefined, cacheDbEntry.version);
     assert.neq(undefined, cacheDbEntry.version.uuid);
-    assert.neq(undefined, cacheDbEntry.version.lastMod);*/
+    assert.neq(undefined, cacheDbEntry.version.lastMod);
 
     st.stop();
 })();
