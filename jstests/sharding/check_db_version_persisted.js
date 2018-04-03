@@ -21,6 +21,7 @@
 
     assert.commandWorked(
         st.rs0.getPrimary().getDB('admin').runCommand({_flushDatabaseCacheUpdates: db}));
+    st.rs0.awaitReplication();
 
     // Check that the db version is persisted on the shard.
     const cacheDbEntry = st.shard0.getDB("config").cache.databases.findOne({_id: db});

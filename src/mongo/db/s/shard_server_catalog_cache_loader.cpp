@@ -440,8 +440,8 @@ void ShardServerCatalogCacheLoader::getDatabase(
         isPrimary = (_role == ReplicaSetRole::Primary);
     }
 
-    uassertStatusOK(
-        _threadPool.schedule([ this, dbName, callbackFn, isPrimary, currentTerm ]() noexcept {
+    uassertStatusOK(_threadPool.schedule(
+        [ this, name = std::string(dbName), callbackFn, isPrimary, currentTerm ]() noexcept {
             auto context = _contexts.makeOperationContext(*Client::getCurrent());
 
             {
@@ -461,7 +461,7 @@ void ShardServerCatalogCacheLoader::getDatabase(
 
             try {
                 if (isPrimary) {
-                    _schedulePrimaryGetDatabase(context.opCtx(), dbName, currentTerm, callbackFn);
+                    _schedulePrimaryGetDatabase(context.opCtx(), name, currentTerm, callbackFn);
                 }
             } catch (const DBException& ex) {
                 callbackFn(context.opCtx(), ex.toStatus());
@@ -657,9 +657,10 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
         return getPersistedMaxDbVersion(opCtx, dbName);
     }();
 
-    auto remoteRefreshCallbackFn = [this, dbName, maxLoaderVersion, termScheduled, callbackFn](
-        OperationContext* opCtx, StatusWith<DatabaseType> swDatabaseType) {
-        
+    auto remoteRefreshCallbackFn =
+        [ this, name = std::string(dbName), maxLoaderVersion, termScheduled, callbackFn ](
+            OperationContext * opCtx, StatusWith<DatabaseType> swDatabaseType) {
+
         if (swDatabaseType == ErrorCodes::NamespaceNotFound) {
             // The database was dropped. The persisted metadata for the database must be cleared.
             uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
@@ -669,8 +670,8 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
                                               "may not have the latest data.");
 
             uassertStatusOKWithContext(
-                deleteDatabasesEntry(opCtx, dbName),
-                str::stream() << "Failed to clear persisted metadata for db '" << dbName
+                deleteDatabasesEntry(opCtx, name),
+                str::stream() << "Failed to clear persisted metadata for db '" << name
                               << "'. Will be retried.");
 
         } else if (swDatabaseType.isOK()) {
@@ -683,14 +684,13 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
                                                   "this is not the majority primary and "
                                                   "may not have the latest data.");
 
-                uassertStatusOKWithContext(persistDbVersion(opCtx, dbType),
-                                           str::stream()
-                                               << "Failed to update the persisted metadata for db '"
-                                               << dbName
-                                               << "'. Will be retried.");
+                uassertStatusOKWithContext(
+                    persistDbVersion(opCtx, dbType),
+                    str::stream() << "Failed to update the persisted metadata for db '" << name
+                                  << "'. Will be retried.");
             }
 
-            log() << "Cache loader remotely refreshed for database " << dbName;
+            log() << "Cache loader remotely refreshed for database " << name;
         }
 
         // Complete the callbackFn work.

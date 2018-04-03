@@ -148,7 +148,7 @@ StatusWith<CachedDatabaseInfo> CatalogCache::getDatabase(OperationContext* opCtx
 
                 const auto refreshCallbackFn = [](OperationContext* opCtx,
                                                   StatusWith<DatabaseType>) {};
-                _cacheLoader.getDatabase(dbName, refreshCallbackFn);
+                _cacheLoader.getDatabase(dbName.toString(), refreshCallbackFn);
 
                 CollectionInfoMap collectionEntries;
                 for (const auto& coll : collections) {

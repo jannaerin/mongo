@@ -200,14 +200,14 @@ void ConfigServerCatalogCacheLoader::getDatabase(
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
 
     if (MONGO_FAIL_POINT(callShardServerCallbackFn)) {
-        uassertStatusOK(_threadPool.schedule([ dbName, callbackFn ]() noexcept {
+        uassertStatusOK(_threadPool.schedule([ name = std::string(dbName), callbackFn ]() noexcept {
             auto opCtx = Client::getCurrent()->makeOperationContext();
 
             auto swDbt = [&]() -> StatusWith<DatabaseType> {
                 try {
 
                     const auto dbVersion = Versioning::newDatabaseVersion();
-                    DatabaseType dbt(dbName, ShardId("PrimaryShard"), false, dbVersion);
+                    DatabaseType dbt(name, ShardId("PrimaryShard"), false, dbVersion);
                     return dbt;
                 } catch (const DBException& ex) {
                     return ex.toStatus();
