@@ -117,7 +117,7 @@ public:
 
         const auto request = _flushDatabaseCacheUpdatesRequest::parse(
             IDLParserErrorContext("_FlushDatabaseCacheUpdatesRequest"), cmdObj);
-        auto name = request.getDbName();
+        auto name = request.getCommandParameter().toString();
 
         {
             AutoGetDb autoDb(opCtx, name, MODE_IS);
@@ -137,8 +137,8 @@ public:
         oss.waitForMigrationCriticalSectionSignal(opCtx);
 
         if (request.getSyncFromConfig()) {
-            LOG(1) << "Forcing remote routing table refresh for " << dbname;
-            forceShardFilteringDbRefresh(opCtx, name);
+            LOG(1) << "Forcing remote routing table refresh for " << name;
+            forceDatabaseRefresh(opCtx, name);
         }
 
         CatalogCacheLoader::get(opCtx).waitForDatabaseFlush(opCtx, name);

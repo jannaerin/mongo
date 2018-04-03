@@ -183,14 +183,14 @@ void onDbVersionMismatch(OperationContext* opCtx,
     }
 
     try {
-        forceShardFilteringDbRefresh(opCtx, dbName);
+        forceDatabaseRefresh(opCtx, dbName);
     } catch (const DBException& ex) {
         log() << "Failed to refresh databaseVersion for database " << dbName
               << causedBy(redact(ex));
     }
 }
 
-void forceShardFilteringDbRefresh(OperationContext* opCtx, const StringData dbName) {
+void forceDatabaseRefresh(OperationContext* opCtx, const StringData dbName) {
     invariant(!opCtx->lockState()->isLocked());
     invariant(!opCtx->getClient()->isInDirectClient());
 

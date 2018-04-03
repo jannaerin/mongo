@@ -37,7 +37,7 @@ commands:
         description: "An internal command to wait for the last routing table cache refresh for a particular database to be persisted to disk"
         strict: true
         namespace: type
-        type: namespacestring
+        type: string
         fields:
             syncFromConfig:
                 type: bool
