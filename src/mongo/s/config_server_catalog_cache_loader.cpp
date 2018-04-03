@@ -166,8 +166,8 @@ void ConfigServerCatalogCacheLoader::waitForCollectionFlush(OperationContext* op
 }
 
 void ConfigServerCatalogCacheLoader::waitForDatabaseFlush(OperationContext* opCtx,
-                                                           StringData dbName) {
-   MONGO_UNREACHABLE; 
+                                                          StringData dbName) {
+    MONGO_UNREACHABLE;
 }
 
 std::shared_ptr<Notification<void>> ConfigServerCatalogCacheLoader::getChunksSince(

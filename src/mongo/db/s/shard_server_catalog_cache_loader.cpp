@@ -489,7 +489,7 @@ void ShardServerCatalogCacheLoader::waitForCollectionFlush(OperationContext* opC
 }
 
 void ShardServerCatalogCacheLoader::waitForDatabaseFlush(OperationContext* opCtx,
-                                                           StringData dbName) {
+                                                         StringData dbName) {
     stdx::unique_lock<stdx::mutex> lg(_mutex);
     const auto initialTerm = _term;
 
@@ -499,7 +499,6 @@ void ShardServerCatalogCacheLoader::waitForDatabaseFlush(OperationContext* opCtx
             _role == ReplicaSetRole::Primary && _term == initialTerm);
 
     return;
-
 }
 
 void ShardServerCatalogCacheLoader::_runSecondaryGetChunksSince(

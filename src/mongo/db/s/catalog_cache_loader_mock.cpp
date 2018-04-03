@@ -90,8 +90,7 @@ void CatalogCacheLoaderMock::waitForCollectionFlush(OperationContext* opCtx,
     MONGO_UNREACHABLE;
 }
 
-void CatalogCacheLoaderMock::waitForDatabaseFlush(OperationContext* opCtx,
-                                                           StringData dbName) {
+void CatalogCacheLoaderMock::waitForDatabaseFlush(OperationContext* opCtx, StringData dbName) {
     MONGO_UNREACHABLE;
 }
 

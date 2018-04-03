@@ -190,17 +190,16 @@ void onDbVersionMismatch(OperationContext* opCtx,
     }
 }
 
-void forceShardFilteringDbRefresh(OperationContext* opCtx,
-                                                const StringData dbName) {
+void forceShardFilteringDbRefresh(OperationContext* opCtx, const StringData dbName) {
     invariant(!opCtx->lockState()->isLocked());
     invariant(!opCtx->getClient()->isInDirectClient());
 
     auto const shardingState = ShardingState::get(opCtx);
     invariantOK(shardingState->canAcceptShardedCommands());
-            
+
     const auto refreshedDbVersion =
-            uassertStatusOK(Grid::get(opCtx)->catalogCache()->getDatabaseWithRefresh(opCtx, dbName))
-                .databaseVersion();
+        uassertStatusOK(Grid::get(opCtx)->catalogCache()->getDatabaseWithRefresh(opCtx, dbName))
+            .databaseVersion();
 
     // First, check under a shared lock if another thread already updated the cached version.
     // This is a best-effort optimization to make as few threads as possible to convoy on the
