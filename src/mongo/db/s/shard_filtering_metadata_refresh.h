@@ -78,4 +78,7 @@ void onDbVersionMismatch(OperationContext* opCtx,
                          const DatabaseVersion& clientDbVersion,
                          const boost::optional<DatabaseVersion>& serverDbVersion) noexcept;
 
+void forceShardFilteringDbRefresh(OperationContext* opCtx,
+                                                const StringData dbName);
+
 }  // namespace mongo
