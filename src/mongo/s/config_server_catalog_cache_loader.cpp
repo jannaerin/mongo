@@ -196,7 +196,7 @@ std::shared_ptr<Notification<void>> ConfigServerCatalogCacheLoader::getChunksSin
 }
 
 void ConfigServerCatalogCacheLoader::getDatabase(
-    StringData dbName,
+    const std::string& dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
 
     if (MONGO_FAIL_POINT(callShardServerCallbackFn)) {
@@ -207,7 +207,7 @@ void ConfigServerCatalogCacheLoader::getDatabase(
                 try {
 
                     const auto dbVersion = Versioning::newDatabaseVersion();
-                    DatabaseType dbt(dbName.toString(), ShardId("PrimaryShard"), false, dbVersion);
+                    DatabaseType dbt(dbName, ShardId("PrimaryShard"), false, dbVersion);
                     return dbt;
                 } catch (const DBException& ex) {
                     return ex.toStatus();

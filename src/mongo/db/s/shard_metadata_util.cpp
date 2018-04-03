@@ -262,7 +262,7 @@ Status updateShardDatabasesEntry(OperationContext* opCtx,
     invariant(query.hasField("_id"));
     if (upsert) {
         // If upserting, this should be an update from the config server that does not have shard
-        // refresh / migration inc signal information.
+        // migration inc signal information.
         invariant(inc.isEmpty());
     }
 

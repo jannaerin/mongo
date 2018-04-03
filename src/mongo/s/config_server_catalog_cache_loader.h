@@ -55,7 +55,7 @@ public:
         override;
 
     void getDatabase(
-        StringData dbName,
+        const std::string& dbName,
         stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) override;
 
 private:

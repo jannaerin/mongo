@@ -425,7 +425,7 @@ std::shared_ptr<Notification<void>> ShardServerCatalogCacheLoader::getChunksSinc
 }
 
 void ShardServerCatalogCacheLoader::getDatabase(
-    StringData dbName,
+    const std::string& dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
     long long currentTerm;
     bool isPrimary;
@@ -649,10 +649,9 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
 
 void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
     OperationContext* opCtx,
-    StringData dbName,
+    const std::string& dbName,
     long long termScheduled,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
-
     // Get the max version the loader has.
     boost::optional<DatabaseVersion> maxLoaderVersion = [&] {
         return getPersistedMaxDbVersion(opCtx, dbName);
@@ -660,7 +659,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
 
     auto remoteRefreshCallbackFn = [this, dbName, maxLoaderVersion, termScheduled, callbackFn](
         OperationContext* opCtx, StatusWith<DatabaseType> swDatabaseType) {
-        log() << "XXX I SHOULDNT BE IN HERE";
+        
         if (swDatabaseType == ErrorCodes::NamespaceNotFound) {
             // The database was dropped. The persisted metadata for the database must be cleared.
             uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
@@ -671,14 +670,13 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
 
             uassertStatusOKWithContext(
                 deleteDatabasesEntry(opCtx, dbName),
-                str::stream() << "Failed to clear persisted metadata for db '" << dbName.toString()
+                str::stream() << "Failed to clear persisted metadata for db '" << dbName
                               << "'. Will be retried.");
 
         } else if (swDatabaseType.isOK()) {
             auto& dbType = swDatabaseType.getValue();
 
-            if (!bool(maxLoaderVersion) ||
-                (bool(maxLoaderVersion) && (dbType.getVersion() > maxLoaderVersion.get()))) {
+            if (!bool(maxLoaderVersion) || (dbType.getVersion() > maxLoaderVersion.get())) {
                 uassertStatusOKWithContext(waitForLinearizableReadConcern(opCtx),
                                            str::stream()
                                                << "Unable to schedule routing table update because "
@@ -688,11 +686,11 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
                 uassertStatusOKWithContext(persistDbVersion(opCtx, dbType),
                                            str::stream()
                                                << "Failed to update the persisted metadata for db '"
-                                               << dbName.toString()
+                                               << dbName
                                                << "'. Will be retried.");
             }
 
-            log() << "Cache loader remotely refreshed for database " << dbName.toString();
+            log() << "Cache loader remotely refreshed for database " << dbName;
         }
 
         // Complete the callbackFn work.

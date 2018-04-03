@@ -90,7 +90,7 @@ public:
         override;
 
     void getDatabase(
-        StringData dbName,
+        const std::string& dbName,
         stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) override;
 
     void waitForCollectionFlush(OperationContext* opCtx, const NamespaceString& nss) override;
@@ -281,7 +281,7 @@ private:
      */
     void _schedulePrimaryGetDatabase(
         OperationContext* opCtx,
-        StringData dbName,
+        const std::string& dbName,
         long long termScheduled,
         stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn);
 
