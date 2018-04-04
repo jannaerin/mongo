@@ -18,7 +18,7 @@
 
     assert.commandWorked(st.s.adminCommand({shardCollection: nss, key: {_id: 1}}));
     assert.commandWorked(st.s.getDB(db).runCommand({listCollections: 1, filter: {name: nss}}));
-
+    jsTestLog("xxxx going to flush");
     assert.commandWorked(
         st.rs0.getPrimary().getDB('admin').runCommand({_flushDatabaseCacheUpdates: db}));
     st.rs0.awaitReplication();

@@ -863,7 +863,20 @@ Status ShardServerCatalogCacheLoader::_ensureMajorityPrimaryAndScheduleDbTask(
 
     stdx::lock_guard<stdx::mutex> lock(_mutex);
 
+    log() << "XXX checking if db task list empty for " << dbName.toString();
+        auto taskListIt = _dbTaskLists.find(dbName);
+        if (taskListIt != _dbTaskLists.end()) {
+            log() << "xxxx nothing is in this list :(";
+        }
+
     const bool wasEmpty = _dbTaskLists[dbName].empty();
+    log() << "XXX empty is " << wasEmpty;
+    log() << "XXX adding task to db " << dbName.toString();
+
+        taskListIt = _dbTaskLists.find(dbName);
+        if (taskListIt != _dbTaskLists.end()) {
+            log() << "xxxx nothing is in this list :(";
+        }
     _dbTaskLists[dbName].addTask(std::move(task));
 
     if (wasEmpty) {
@@ -875,6 +888,7 @@ Status ShardServerCatalogCacheLoader::_ensureMajorityPrimaryAndScheduleDbTask(
                   << "'. Clearing task list so that scheduling"
                   << " will be attempted by the next caller to refresh this namespace.";
             stdx::lock_guard<stdx::mutex> lock(_mutex);
+            log() << "xxx erasing all tasks for " << dbName.toString() << " bc couldn't schedule";
             _dbTaskLists.erase(dbName);
         }
         return status;
@@ -930,8 +944,10 @@ void ShardServerCatalogCacheLoader::_runDbTasks(StringData dbName) {
 
     bool taskFinished = false;
     try {
+        log() << "xxx updating persisted metadata for " << dbName.toString();
         _updatePersistedDbMetadata(context.opCtx(), dbName);
         taskFinished = true;
+        log() << "xxx task marked as finished";
     } catch (const DBException& ex) {
         Status exceptionStatus = ex.toStatus();
 
@@ -949,10 +965,19 @@ void ShardServerCatalogCacheLoader::_runDbTasks(StringData dbName) {
 
     // If task completed successfully, remove it from work queue
     if (taskFinished) {
+        log() << "xxx popping front bc task finished for " << dbName.toString();
+        auto taskListIt = _dbTaskLists.find(dbName);
+        if (taskListIt != _dbTaskLists.end()) {
+            log() << "xxxx nothing is in this list :(";
+        }
         _dbTaskLists[dbName].pop_front();
     }
 
     // Schedule more work if there is any
+        auto taskListIt = _dbTaskLists.find(dbName);
+        if (taskListIt != _dbTaskLists.end()) {
+            log() << "xxxx nothing is in this list :(";
+        }
     if (!_dbTaskLists[dbName].empty()) {
         Status status = _threadPool.schedule(
             [ this, name = dbName.toString() ]() { _runDbTasks(StringData(name)); });
@@ -961,9 +986,11 @@ void ShardServerCatalogCacheLoader::_runDbTasks(StringData dbName) {
                   << " task for namespace '" << dbName.toString() << "' due to '" << redact(status)
                   << "'. Clearing task list so that scheduling will be attempted by the next"
                   << " caller to refresh this namespace.";
+            log() << "xxx erasing db task list for " << dbName.toString() << " bc couldn't schedule";
             _dbTaskLists.erase(dbName);
         }
     } else {
+        log() << "xxx erasing db task list for " << dbName.toString() << " bc no more work to do";
         _dbTaskLists.erase(dbName);
     }
 }
@@ -1011,6 +1038,10 @@ void ShardServerCatalogCacheLoader::_updatePersistedDbMetadata(OperationContext*
                                                                StringData dbName) {
     stdx::unique_lock<stdx::mutex> lock(_mutex);
 
+        auto taskListIt = _dbTaskLists.find(dbName);
+        if (taskListIt != _dbTaskLists.end()) {
+            log() << "xxxx nothing is in this list :(";
+        }
     const dbTask& task = _dbTaskLists[dbName].front();
 
     // If this task is from an old term and no longer valid, do not execute and return true so that
@@ -1036,7 +1067,7 @@ void ShardServerCatalogCacheLoader::_updatePersistedDbMetadata(OperationContext*
                                              << dbName.toString()
                                              << "'. Will be retried.");
 
-    LOG(1) << "Successfully updated persisted metadata for db '" << dbName.toString();
+    log() << "Successfully updated persisted metadata for db '" << dbName.toString();
 }
 
 CollectionAndChangedChunks
@@ -1146,7 +1177,9 @@ void ShardServerCatalogCacheLoader::CollAndChunkTaskList::addTask(collAndChunkTa
 
 void ShardServerCatalogCacheLoader::DbTaskList::addTask(dbTask task) {
     if (_tasks.empty()) {
+        log() << "XXX task list is empty and putting task on";
         _tasks.emplace_back(std::move(task));
+
         return;
     }
 
@@ -1157,17 +1190,19 @@ void ShardServerCatalogCacheLoader::DbTaskList::addTask(dbTask task) {
         // throw-away work from executing. Because we have no way to differentiate whether the
         // active tasks is currently being operated on by a thread or not, we must leave the front
         // intact.
+        log() << "XXX erasing everything but front task ";
         _tasks.erase(std::next(_tasks.begin()), _tasks.end());
 
         // No need to schedule a drop if one is already currently active.
         if (!_tasks.front().dropped) {
+            log() << "xxx putting task on back of list dropped";
             _tasks.emplace_back(std::move(task));
         }
     } else {
         // Tasks must have contiguous versions, unless a complete reload occurs.
         invariant(!bool(task.minVersion) ||
                   (_tasks.back().maxVersion.get() == task.minVersion.get()));
-
+        log() << "xxx putting task on back of list not dropped";
         _tasks.emplace_back(std::move(task));
     }
 }
@@ -1180,6 +1215,7 @@ void ShardServerCatalogCacheLoader::CollAndChunkTaskList::pop_front() {
 
 void ShardServerCatalogCacheLoader::DbTaskList::pop_front() {
     invariant(!_tasks.empty());
+    log() << "xxxx popping the front of db list";
     _tasks.pop_front();
     _activeTaskCompletedCondVar->notify_all();
 }
