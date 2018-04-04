@@ -138,7 +138,7 @@ public:
      * The callbackFn object must not be destroyed until it has been called.
      */
     virtual void getDatabase(
-        const std::string& dbName,
+        StringData dbName,
         stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) = 0;
 
     /**

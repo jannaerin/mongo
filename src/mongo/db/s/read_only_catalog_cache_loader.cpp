@@ -51,7 +51,7 @@ std::shared_ptr<Notification<void>> ReadOnlyCatalogCacheLoader::getChunksSince(
 }
 
 void ReadOnlyCatalogCacheLoader::getDatabase(
-    const std::string& dbName,
+    StringData dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
     return _configServerLoader.getDatabase(dbName, callbackFn);
 }

@@ -425,7 +425,7 @@ std::shared_ptr<Notification<void>> ShardServerCatalogCacheLoader::getChunksSinc
 }
 
 void ShardServerCatalogCacheLoader::getDatabase(
-    const std::string& dbName,
+    StringData dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
     long long currentTerm;
     bool isPrimary;
@@ -441,7 +441,7 @@ void ShardServerCatalogCacheLoader::getDatabase(
     }
 
     uassertStatusOK(_threadPool.schedule(
-        [ this, name = std::string(dbName), callbackFn, isPrimary, currentTerm ]() noexcept {
+        [ this, name = dbName.toString(), callbackFn, isPrimary, currentTerm ]() noexcept {
             auto context = _contexts.makeOperationContext(*Client::getCurrent());
 
             {
@@ -461,7 +461,8 @@ void ShardServerCatalogCacheLoader::getDatabase(
 
             try {
                 if (isPrimary) {
-                    _schedulePrimaryGetDatabase(context.opCtx(), name, currentTerm, callbackFn);
+                    _schedulePrimaryGetDatabase(
+                        context.opCtx(), StringData(name), currentTerm, callbackFn);
                 }
             } catch (const DBException& ex) {
                 callbackFn(context.opCtx(), ex.toStatus());
@@ -649,7 +650,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
 
 void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
     OperationContext* opCtx,
-    const std::string& dbName,
+    StringData dbName,
     long long termScheduled,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
     // Get the max version the loader has.
@@ -658,7 +659,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetDatabase(
     }();
 
     auto remoteRefreshCallbackFn =
-        [ this, name = std::string(dbName), maxLoaderVersion, termScheduled, callbackFn ](
+        [ this, name = dbName.toString(), maxLoaderVersion, termScheduled, callbackFn ](
             OperationContext * opCtx, StatusWith<DatabaseType> swDatabaseType) {
 
         if (swDatabaseType == ErrorCodes::NamespaceNotFound) {

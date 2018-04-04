@@ -129,7 +129,7 @@ std::shared_ptr<Notification<void>> CatalogCacheLoaderMock::getChunksSince(
 }
 
 void CatalogCacheLoaderMock::getDatabase(
-    const std::string& dbName,
+    StringData dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
     // Not implemented
 }

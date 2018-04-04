@@ -196,11 +196,11 @@ std::shared_ptr<Notification<void>> ConfigServerCatalogCacheLoader::getChunksSin
 }
 
 void ConfigServerCatalogCacheLoader::getDatabase(
-    const std::string& dbName,
+    StringData dbName,
     stdx::function<void(OperationContext*, StatusWith<DatabaseType>)> callbackFn) {
 
     if (MONGO_FAIL_POINT(callShardServerCallbackFn)) {
-        uassertStatusOK(_threadPool.schedule([ name = std::string(dbName), callbackFn ]() noexcept {
+        uassertStatusOK(_threadPool.schedule([ name = dbName.toString(), callbackFn ]() noexcept {
             auto opCtx = Client::getCurrent()->makeOperationContext();
 
             auto swDbt = [&]() -> StatusWith<DatabaseType> {
