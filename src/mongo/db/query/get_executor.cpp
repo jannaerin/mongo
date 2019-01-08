@@ -1040,16 +1040,15 @@ StatusWith<unique_ptr<PlanExecutor, PlanExecutor::Deleter>> getExecutorUpdate(
     if (!executionResult.isOK()) {
         return executionResult.getStatus();
     }
+
     cq = std::move(executionResult.getValue().canonicalQuery);
     unique_ptr<QuerySolution> querySolution = std::move(executionResult.getValue().querySolution);
     unique_ptr<PlanStage> root = std::move(executionResult.getValue().root);
-
     invariant(root);
     updateStageParams.canonicalQuery = cq.get();
 
     root = stdx::make_unique<UpdateStage>(
         opCtx, updateStageParams, ws.get(), collection, root.release());
-
     if (!request->getProj().isEmpty()) {
         invariant(request->shouldReturnAnyDocs());
 

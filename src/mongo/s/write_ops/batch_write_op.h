@@ -160,6 +160,10 @@ public:
                            const BatchedCommandResponse& response,
                            TrackedErrors* trackedErrors);
 
+    void clearUpdateShardKeyError(const TargetedWriteBatch& targetedBatch,
+                                  const BatchedCommandResponse& response);
+
+
     /**
      * Stores an error that occurred trying to send/recv a TargetedWriteBatch for this
      * BatchWriteOp.

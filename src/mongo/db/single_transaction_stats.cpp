@@ -36,7 +36,6 @@ namespace mongo {
 
 void SingleTransactionStats::setStartTime(TickSource::Tick curTick, Date_t curWallClockTime) {
     invariant(_startTime == 0);
-
     _startTime = curTick;
     _startWallClockTime = curWallClockTime;
 }

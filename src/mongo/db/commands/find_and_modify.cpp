@@ -469,13 +469,14 @@ public:
 
                 const auto exec =
                     uassertStatusOK(getExecutorUpdate(opCtx, opDebug, collection, &parsedUpdate));
-
+                
                 {
                     stdx::lock_guard<Client> lk(*opCtx->getClient());
                     CurOp::get(opCtx)->setPlanSummary_inlock(Explain::getPlanSummary(exec.get()));
                 }
 
                 auto docFound = advanceExecutor(opCtx, exec.get(), args.isRemove());
+
                 // Nothing after advancing the plan executor should throw a WriteConflictException,
                 // so the following bookkeeping with execution stats won't end up being done
                 // multiple times.

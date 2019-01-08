@@ -378,7 +378,7 @@ StatusWith<Shard::QueryResponse> ShardRemote::_exhaustiveFindOnConfig(
 
         qr.asFindCommand(&findCmdBuilder);
     }
-
+    
     return _runExhaustiveCursorCommand(
         opCtx, readPrefWithMinOpTime, nss.db().toString(), maxTimeMS, findCmdBuilder.done());
 }

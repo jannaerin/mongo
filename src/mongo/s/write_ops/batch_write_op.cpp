@@ -27,7 +27,7 @@
  *    exception statement from all source files in the program, then also delete
  *    it in the license file.
  */
-
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kCommand
 #include "mongo/platform/basic.h"
 
 #include "mongo/s/write_ops/batch_write_op.h"
@@ -38,6 +38,7 @@
 #include "mongo/db/operation_context.h"
 #include "mongo/s/transaction_router.h"
 #include "mongo/stdx/memory.h"
+#include "mongo/util/log.h"
 #include "mongo/util/transitional_tools_do_not_use/vector_spooling.h"
 
 namespace mongo {
@@ -293,7 +294,6 @@ Status BatchWriteOp::targetBatch(const NSTargeter& targeter,
     //
 
     const bool ordered = _clientRequest.getWriteCommandBase().getOrdered();
-
     TargetedBatchMap batchMap;
     std::set<ShardId> targetedShards;
 
@@ -532,6 +532,74 @@ BatchedCommandRequest BatchWriteOp::buildBatchRequest(
     return request;
 }
 
+void BatchWriteOp::clearUpdateShardKeyError(const TargetedWriteBatch& targetedBatch,
+                                            const BatchedCommandResponse& response) {
+    if (!response.getOk()) {
+        WriteErrorDetail error;
+        error.setStatus(response.getTopLevelStatus());
+
+        // Treat command errors exactly like other failures of the batch.
+        //
+        // Note that no errors will be tracked from these failures - as-designed.
+
+        // Treat errors to get a batch response as failures of the contained writes
+        BatchedCommandResponse emulatedResponse;
+        emulatedResponse.setStatus(Status::OK());
+        emulatedResponse.setN(0);
+
+        const int numErrors = _clientRequest.getWriteCommandBase().getOrdered()
+            ? 1
+            : targetedBatch.getWrites().size();
+
+        for (int i = 0; i < numErrors; i++) {
+            auto errorClone(stdx::make_unique<WriteErrorDetail>());
+            error.cloneTo(errorClone.get());
+            errorClone->setIndex(i);
+            emulatedResponse.addToErrDetails(errorClone.release());
+        }
+
+        dassert(emulatedResponse.isValid(nullptr));
+
+
+        clearUpdateShardKeyError(targetedBatch, emulatedResponse);
+        return;
+    }
+
+    vector<WriteErrorDetail*> itemErrors;
+
+    // Handle batch and per-item errors
+    if (response.isErrDetailsSet()) {
+        // Per-item errors were set
+        itemErrors.insert(
+            itemErrors.begin(), response.getErrDetails().begin(), response.getErrDetails().end());
+
+        // Sort per-item errors by index
+        std::sort(itemErrors.begin(), itemErrors.end(), WriteErrorDetailComp());
+    }
+
+    vector<WriteErrorDetail*>::iterator itemErrorIt = itemErrors.begin();
+    int index = 0;
+
+    for (vector<TargetedWrite *>::const_iterator it = targetedBatch.getWrites().begin();
+         it != targetedBatch.getWrites().end();
+         ++it, ++index) {
+        const TargetedWrite* write = *it;
+        WriteOp& writeOp = _writeOps[write->writeOpRef.first];
+
+        if (itemErrorIt != itemErrors.end()) {
+            if ((*itemErrorIt)->getIndex() == index) {
+                // We have an per-item error for this write op's index
+                WriteErrorDetail* writeError = *itemErrorIt;
+
+                if (writeError->toStatus().code() == ErrorCodes::WouldChangeOwningShard) {
+                    writeOp.noteWriteComplete(*write);
+                }
+                ++itemErrorIt;
+            }
+        }
+    }
+}
+
 void BatchWriteOp::noteBatchResponse(const TargetedWriteBatch& targetedBatch,
                                      const BatchedCommandResponse& response,
                                      TrackedErrors* trackedErrors) {
@@ -551,7 +619,6 @@ void BatchWriteOp::noteBatchResponse(const TargetedWriteBatch& targetedBatch,
 
     // Increment stats for this batch
     _incBatchStats(response);
-
     //
     // Assign errors to particular items.
     // Write Concern errors are stored and handled later.
@@ -561,7 +628,6 @@ void BatchWriteOp::noteBatchResponse(const TargetedWriteBatch& targetedBatch,
     if (response.isWriteConcernErrorSet()) {
         _wcErrors.emplace_back(targetedBatch.getEndpoint(), *response.getWriteConcernError());
     }
-
     vector<WriteErrorDetail*> itemErrors;
 
     // Handle batch and per-item errors
@@ -886,10 +952,11 @@ void TrackedErrors::addError(ShardError error) {
     TrackedErrorMap::iterator seenIt = _errorMap.find(error.error.toStatus().code());
     if (seenIt == _errorMap.end())
         return;
-    seenIt->second.emplace_back(std::move(error));
+    _errorMap.find(error.error.toStatus().code())->second.emplace_back(std::move(error));
 }
 
 const std::vector<ShardError>& TrackedErrors::getErrors(int errCode) const {
+    isTracking(errCode);
     dassert(isTracking(errCode));
     return _errorMap.find(errCode)->second;
 }

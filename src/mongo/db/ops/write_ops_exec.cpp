@@ -79,6 +79,7 @@
 #include "mongo/util/log.h"
 #include "mongo/util/log_and_backoff.h"
 #include "mongo/util/scopeguard.h"
+#include "mongo/s/would_change_owning_shard_exception.h"
 
 namespace mongo {
 

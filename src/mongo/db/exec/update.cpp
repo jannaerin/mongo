@@ -25,7 +25,7 @@
  *    file(s), but you are not obligated to do so. If you do not wish to do so,
  *    delete this exception statement from your version. If you delete this
  *    exception statement from all source files in the program, then also delete
- *    it in the license file.
+*    it in the license file.
  */
 
 #define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kWrite
@@ -52,11 +52,13 @@
 #include "mongo/db/storage/duplicate_key_error_info.h"
 #include "mongo/db/update/path_support.h"
 #include "mongo/db/update/storage_validation.h"
+#include "mongo/s/would_change_owning_shard_exception.h"
 #include "mongo/stdx/memory.h"
 #include "mongo/util/assert_util.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
 #include "mongo/util/transitional_tools_do_not_use/vector_spooling.h"
+#include "mongo/util/stacktrace.h"
 
 namespace mongo {
 
@@ -72,6 +74,7 @@ namespace mb = mutablebson;
 namespace {
 
 const char idFieldName[] = "_id";
+constexpr StringData kIdFieldName = "_id"_sd;
 const FieldRef idFieldRef(idFieldName);
 
 Status ensureIdFieldIsFirst(mb::Document* doc) {
@@ -147,6 +150,7 @@ const std::vector<std::unique_ptr<FieldRef>>* getImmutableFields(OperationContex
         // Return shard-keys as immutable for the update system.
         return &fields;
     }
+
     return NULL;
 }
 
@@ -254,6 +258,7 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
         uasserted(16837, status.reason());
     }
 
+
     // Skip adding _id field if the collection is capped (since capped collection documents can
     // neither grow nor shrink).
     const auto createIdField = !collection()->isCapped();
@@ -286,8 +291,6 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
     if (docWasModified) {
 
         // Prepare to write back the modified document
-        WriteUnitOfWork wunit(getOpCtx());
-
         RecordId newRecordId;
         CollectionUpdateArgs args;
         if (!request->isExplain()) {
@@ -313,8 +316,13 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
 
                 Snapshotted<RecordData> snap(oldObj.snapshotId(), oldRec);
 
+                // DO STUFF HERE TOO TO CHECK
+
+                WriteUnitOfWork wunit(getOpCtx());
                 StatusWith<RecordData> newRecStatus = collection()->updateDocumentWithDamages(
                     getOpCtx(), recordId, std::move(snap), source, _damages, &args);
+                invariant(oldObj.snapshotId() == getOpCtx()->recoveryUnit()->getSnapshotId());
+                wunit.commit();
 
                 newObj = uassertStatusOK(std::move(newRecStatus)).releaseToBson();
             }
@@ -329,7 +337,43 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
                                   << BSONObjMaxUserSize,
                     newObj.objsize() <= BSONObjMaxUserSize);
 
+            log() << "xxx old obj: " << oldObj.value();
+
+            auto metadata = CollectionShardingState::get(getOpCtx(), collection()->ns())
+                                ->getMetadataForOperation(getOpCtx());
+            if (metadata->isSharded()) {
+                for (auto path = immutablePaths.begin(); path != immutablePaths.end(); ++path) {
+                    auto elem = _doc.root();
+                    for (size_t i = 0; i < (*path)->numParts(); ++i) {
+                        elem = elem[(*path)->getPart(i)];
+                        log() << "xxx elem " << elem;
+                        if (elem.getFieldName() != kIdFieldName) {
+                            auto shardKeyValueElem = elem.getValue();
+
+                            BSONObjBuilder newShardKeyValueBuilder;
+                            newShardKeyValueBuilder.append(shardKeyValueElem);
+                            auto newShardKeyValue = newShardKeyValueBuilder.obj();
+                            log() << "xxx new shard key " << newShardKeyValue;
+
+                            for (const auto& chunk : metadata->getChunks()) {
+                                auto chunkRange = ChunkRange(chunk.first, chunk.second);
+
+                                uassert(WouldChangeOwningShardInfo(
+                                            BSON(oldObj.value().getField(elem.getFieldName())),
+                                            newShardKeyValue,
+                                            _doc.getObject()),
+                                        str::stream() << "would change owning!",
+                                        chunkRange.containsKey(newShardKeyValue) &&
+                                            chunkRange.containsKey(
+                                                BSON(oldObj.value()[elem.getFieldName()])));
+                            }
+                        }
+                    }
+                }
+            }
+
             if (!request->isExplain()) {
+                WriteUnitOfWork wunit(getOpCtx());
                 newRecordId = collection()->updateDocument(getOpCtx(),
                                                            recordId,
                                                            oldObj,
@@ -337,11 +381,11 @@ BSONObj UpdateStage::transformAndUpdate(const Snapshotted<BSONObj>& oldObj, Reco
                                                            driver->modsAffectIndices(),
                                                            _params.opDebug,
                                                            &args);
+
+                invariant(oldObj.snapshotId() == getOpCtx()->recoveryUnit()->getSnapshotId());
+                wunit.commit();
             }
         }
-
-        invariant(oldObj.snapshotId() == getOpCtx()->recoveryUnit()->getSnapshotId());
-        wunit.commit();
 
         // If the document moved, we might see it again in a collection scan (maybe it's
         // a document after our current document).
@@ -809,7 +853,7 @@ const SpecificStats* UpdateStage::getSpecificStats() const {
 }
 
 const UpdateStats* UpdateStage::getUpdateStats(const PlanExecutor* exec) {
-    invariant(exec->getRootStage()->isEOF());
+    // invariant(exec->getRootStage()->isEOF());
 
     // If we're updating a non-existent collection, then the delete plan may have an EOF as the root
     // stage.

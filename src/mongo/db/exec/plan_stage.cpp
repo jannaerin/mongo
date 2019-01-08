@@ -44,7 +44,7 @@ PlanStage::StageState PlanStage::work(WorkingSetID* out) {
     invariant(_opCtx);
     ScopedTimer timer(getClock(), &_commonStats.executionTimeMillis);
     ++_commonStats.works;
-
+    
     StageState workResult = doWork(out);
 
     if (StageState::ADVANCED == workResult) {

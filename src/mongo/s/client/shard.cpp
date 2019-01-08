@@ -245,7 +245,7 @@ StatusWith<Shard::QueryResponse> Shard::exhaustiveFindOnConfig(
             isRetriableError(result.getStatus().code(), RetryPolicy::kIdempotent)) {
             continue;
         }
-
+        
         return result;
     }
     MONGO_UNREACHABLE;

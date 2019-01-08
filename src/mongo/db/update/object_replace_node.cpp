@@ -27,6 +27,7 @@
  *    exception statement from all source files in the program, then also delete
  *    it in the license file.
  */
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kSharding
 
 #include "mongo/platform/basic.h"
 
@@ -38,6 +39,7 @@
 #include "mongo/db/logical_time.h"
 #include "mongo/db/service_context.h"
 #include "mongo/db/update/storage_validation.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
@@ -134,14 +136,25 @@ UpdateNode::ApplyResult ObjectReplaceNode::apply(ApplyParams applyParams) const 
                                  "found to have been removed --"
                               << original,
                 newElem.ok() || !oldElem.ok());
-        if (newElem.ok() && oldElem.ok()) {
+        if (oldElem.fieldName() == kIdFieldName) {
+            log() << "xxx field name is id";
+            if (newElem.ok() && oldElem.ok()) {
+                uassert(ErrorCodes::ImmutableField,
+                        str::stream() << "After applying the update, the (immutable) field '"
+                                      << (*path)->dottedField()
+                                      << "' was found to have been altered to "
+                                      << newElem.toString(),
+                        newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
+            }
+        }
+        /*if (newElem.ok() && oldElem.ok()) {
             uassert(ErrorCodes::ImmutableField,
                     str::stream() << "After applying the update, the (immutable) field '"
                                   << (*path)->dottedField()
                                   << "' was found to have been altered to "
                                   << newElem.toString(),
                     newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
-        }
+        }*/
     }
 
     if (applyParams.logBuilder) {

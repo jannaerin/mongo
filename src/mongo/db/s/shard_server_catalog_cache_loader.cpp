@@ -626,7 +626,7 @@ void ShardServerCatalogCacheLoader::_schedulePrimaryGetChunksSince(
                                     notify](
         OperationContext* opCtx,
         StatusWith<CollectionAndChangedChunks> swCollectionAndChangedChunks) {
-
+                                        
         if (swCollectionAndChangedChunks == ErrorCodes::NamespaceNotFound) {
             Status scheduleStatus = _ensureMajorityPrimaryAndScheduleCollAndChunksTask(
                 opCtx,

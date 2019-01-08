@@ -70,7 +70,6 @@ void ClusterWriter::write(OperationContext* opCtx,
                           BatchedCommandResponse* response,
                           boost::optional<OID> targetEpoch) {
     const NamespaceString& nss = request.getNS();
-
     LastError::Disabled disableLastError(&LastError::get(opCtx->getClient()));
 
     // Config writes and shard writes are done differently

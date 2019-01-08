@@ -39,17 +39,34 @@
 #include "mongo/base/status.h"
 #include "mongo/bson/util/builder.h"
 #include "mongo/client/connection_string.h"
+#include "mongo/client/dbclient_base.h"
 #include "mongo/client/remote_command_targeter.h"
+#include "mongo/db/commands.h"
+#include "mongo/db/curop.h"
+#include "mongo/db/logical_session_cache.h"
+#include "mongo/db/logical_session_id.h"
+#include "mongo/db/logical_session_id_helpers.h"
+#include "mongo/db/session_catalog.h"
+#include "mongo/db/storage/duplicate_key_error_info.h"
 #include "mongo/executor/task_executor_pool.h"
+#include "mongo/rpc/factory.h"
 #include "mongo/s/client/shard_registry.h"
+#include "mongo/s/commands/strategy.h"
 #include "mongo/s/grid.h"
 #include "mongo/s/multi_statement_transaction_requests_sender.h"
+#include "mongo/s/session_catalog_router.h"
 #include "mongo/s/transaction_router.h"
+#include "mongo/db/transaction_participant.h"
+#include "mongo/s/would_change_owning_shard_exception.h"
 #include "mongo/s/write_ops/batch_write_op.h"
+#include "mongo/s/write_ops/cluster_write.h"
 #include "mongo/s/write_ops/write_error_detail.h"
+#include "mongo/transport/service_entry_point.h"
+#include "mongo/util/fail_point_service.h"
 #include "mongo/util/log.h"
 
 namespace mongo {
+
 namespace {
 
 const ReadPreferenceSetting kPrimaryOnlyReadPreference(ReadPreference::PrimaryOnly);
@@ -80,6 +97,132 @@ void noteStaleResponses(const std::vector<ShardError>& staleErrors, NSTargeter* 
     }
 }
 
+Status runUpdateShardKeyTxn(OperationContext* opCtx,
+                            std::vector<BSONObj> cmdObjs,
+                            NamespaceString nss,
+                            LogicalSessionId lsid,
+                            boost::optional<int> stmtId,
+                            bool inTxn) {
+    /*
+    we're requiring updates to be in txns or retryable writes and therefore to
+    have lsids but in case we change later
+
+    LogicalSessionRecord lsidRecord;
+    if (!lsid) {
+        ServiceContext* serviceContext = opCtx->getServiceContext();
+        auto lsCache = LogicalSessionCache::get(serviceContext);
+        boost::optional<LogicalSessionRecord> record =
+            makeLogicalSessionRecord(opCtx, lsCache->now());
+        lsidRecord = record.get();
+        uassertStatusOK(lsCache->startSession(opCtx, record.get()));
+    }*/
+
+    auto executor = Grid::get(opCtx)->getExecutorPool()->getFixedExecutor();
+    if (inTxn) {
+        OperationContextSession::checkIn(opCtx);
+    }
+
+    for (std::size_t i = 0; i != cmdObjs.size(); ++i) {
+        auto cbHandle = uassertStatusOK(
+            executor->scheduleWork([ nss, cmdObj = cmdObjs[i], lsid, i, stmtId, inTxn ](
+                const executor::TaskExecutor::CallbackArgs& args) {
+
+                ThreadClient threadClient("UpdateShardKey", getGlobalServiceContext());
+                auto opCtxHolder = Client::getCurrent()->makeOperationContext();
+                auto opCtx = opCtxHolder.get();
+
+                BSONObjBuilder cmdObjWithLsidBuilder(cmdObj);
+                cmdObjWithLsidBuilder.append("lsid", lsid.toBSON());
+                if (stmtId) {
+                    // need to figure out how to get the lsid from the original request
+                    cmdObjWithLsidBuilder.append("stmtId", stmtId.get());
+                } else {
+                    cmdObjWithLsidBuilder.append("stmtId", static_cast<int>(i));
+                }
+                if (!inTxn && (cmdObj["delete"])) {
+                    cmdObjWithLsidBuilder.append("startTransaction", true);
+                }
+
+                auto b = cmdObjWithLsidBuilder.obj();
+
+                auto db = nss.db();
+                if (cmdObj["commitTransaction"]) {
+                    db = NamespaceString::kAdminDb;
+                }
+                auto requestOpMsg = OpMsgRequest::fromDBAndBody(db, b).serialize();
+
+                const auto replyMsg = OpMsg::parseOwned(opCtx->getServiceContext()
+                                                            ->getServiceEntryPoint()
+                                                            ->handleRequest(opCtx, requestOpMsg)
+                                                            .response);
+
+                invariant(replyMsg.sequences.empty());
+
+                return replyMsg.body;
+            }));
+
+        executor->wait(cbHandle, opCtx);
+    }
+
+    return Status::OK();
+}
+
+Status updateShardKey(OperationContext* opCtx,
+                      NamespaceString nss,
+                      WouldChangeOwningShardInfo errInfo,
+                      TxnNumber txnNumber,
+                      LogicalSessionId lsid,
+                      boost::optional<int> stmtId,
+                      bool inTxn) {
+
+    write_ops::Delete deleteOp(nss);
+    deleteOp.setDeletes({[&] {
+        write_ops::DeleteOpEntry entry;
+        entry.setQ(errInfo.getOriginalShardKey());
+        entry.setMulti(false);
+        return entry;
+    }()});
+
+    write_ops::Insert insertOp(nss);
+    insertOp.setDocuments({errInfo.getPostImg()});
+
+    std::vector<BSONObj> cmdsToRunInTxn;
+
+    if (inTxn) {
+        auto deleteCmdObj =
+            deleteOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+        auto insertCmdObj =
+            insertOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+
+        cmdsToRunInTxn.emplace_back(deleteCmdObj);
+        cmdsToRunInTxn.emplace_back(insertCmdObj);
+        auto updateStatus = runUpdateShardKeyTxn(opCtx, cmdsToRunInTxn, nss, lsid, stmtId, inTxn);
+        uassertStatusOK(updateStatus);
+        return updateStatus;
+    } else {
+
+        auto deleteCmdObj =
+            deleteOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false << "readConcern"
+                                             << BSON("level"
+                                                     << "snapshot")));
+
+        auto insertCmdObj =
+            insertOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+        auto commitCmdObj =
+            BSON("commitTransaction" << 1 << "txnNumber" << txnNumber << "autocommit" << false);
+
+        cmdsToRunInTxn.emplace_back(deleteCmdObj);
+        cmdsToRunInTxn.emplace_back(insertCmdObj);
+        cmdsToRunInTxn.emplace_back(commitCmdObj);
+        auto updateStatus = runUpdateShardKeyTxn(opCtx, cmdsToRunInTxn, nss, lsid, stmtId, inTxn);
+
+        return updateStatus;
+    }
+}
+
 // The number of times we'll try to continue a batch op if no progress is being made. This only
 // applies when no writes are occurring and metadata is not changing on reload.
 const int kMaxRoundsWithoutProgress(5);
@@ -92,7 +235,6 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
                                   BatchedCommandResponse* clientResponse,
                                   BatchWriteExecStats* stats) {
     const auto& nss(clientRequest.getNS());
-
     LOG(4) << "Starting execution of write batch of size "
            << static_cast<int>(clientRequest.sizeWriteOps()) << " for " << nss.ns();
 
@@ -143,6 +285,7 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
             ++stats->numTargetErrors;
             dassert(childBatches.size() == 0u);
         }
+        // auto stale = false;
 
         //
         // Send all child batches
@@ -177,7 +320,6 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
                     continue;
 
                 stats->noteTargetedShard(targetShardId);
-
                 const auto request = [&] {
                     const auto shardBatchRequest(batchOp.buildBatchRequest(*nextBatch));
 
@@ -198,7 +340,7 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
                     return requestBuilder.obj();
                 }();
 
-                LOG(4) << "Sending write batch to " << targetShardId << ": " << redact(request);
+                log() << "Sending write batch to " << targetShardId << ": " << redact(request);
 
                 requests.emplace_back(targetShardId, request);
 
@@ -229,7 +371,6 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
             while (!ars.done()) {
                 // Block until a response is available.
                 auto response = ars.next();
-
                 // Get the TargetedWriteBatch to find where to put the response
                 dassert(pendingBatches.find(response.shardId) != pendingBatches.end());
                 TargetedWriteBatch* batch = pendingBatches.find(response.shardId)->second;
@@ -259,6 +400,7 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
 
                 // Then check if we successfully got a response.
                 Status responseStatus = response.swResponse.getStatus();
+                log() << "xxx response sw value" << response.swResponse.getValue();
                 BatchedCommandResponse batchedCommandResponse;
                 if (responseStatus.isOK()) {
                     std::string errMsg;
@@ -268,31 +410,60 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
                         responseStatus = {ErrorCodes::FailedToParse, errMsg};
                     }
                 }
-
                 if (responseStatus.isOK()) {
                     TrackedErrors trackedErrors;
                     trackedErrors.startTracking(ErrorCodes::StaleShardVersion);
                     trackedErrors.startTracking(ErrorCodes::CannotImplicitlyCreateCollection);
+                    trackedErrors.startTracking(ErrorCodes::WouldChangeOwningShard);
 
-                    LOG(4) << "Write results received from " << shardHost.toString() << ": "
-                           << redact(batchedCommandResponse.toString());
+                    // log() << "Write results received from " << shardHost.toString() << ": "
+                    //<< redact(batchedCommandResponse.toString());
 
                     // If we are in a transaction, we must fail the whole batch on any error.
                     if (TransactionRouter::get(opCtx)) {
                         // Note: this returns a bad status if any part of the batch failed.
                         auto batchStatus = batchedCommandResponse.toStatus();
                         if (!batchStatus.isOK()) {
-                            batchOp.forgetTargetedBatchesOnTransactionAbortingError();
-                            uassertStatusOK(batchStatus.withContext(
-                                str::stream() << "Encountered error from " << shardHost.toString()
-                                              << " during a transaction"));
+                            log() << "xxx got not okay status: " << batchStatus;
+
+                            if (batchStatus.code() != ErrorCodes::WouldChangeOwningShard) {
+                                log() << "xxx does not have would change error";
+                                batchOp.forgetTargetedBatchesOnTransactionAbortingError();
+                                uassertStatusOK(batchStatus.withContext(
+                                    str::stream() << "Encountered error from "
+                                                  << shardHost.toString()
+                                                  << " during a transaction"));
+                            }
+
+                            log() << batchStatus;
+
+                            BSONObjBuilder extraInfoBuilder;
+                            batchStatus.extraInfo()->serialize(&extraInfoBuilder);
+                            auto extraInfo = extraInfoBuilder.obj();
+                            auto wouldChangeInfo =
+                                WouldChangeOwningShardInfo::parseFromCommandError(extraInfo);
+
+
+                            boost::optional<int> stmtIdToSend;
+                            // figure out getting this from request
+                            /*if (request["stmtIds"]) {
+                                stmtIdToSend = request["stmtIds"][0];
+                                log() << "xxx send " << stmtIdToSend.get();
+                            }*/
+
+                            uassertStatusOK(updateShardKey(opCtx,
+                                                           nss,
+                                                           wouldChangeInfo,
+                                                           opCtx->getTxnNumber().get(),
+                                                           opCtx->getLogicalSessionId().get(),
+                                                           boost::none,
+                                                           true));
                         }
                     }
 
                     // Dispatch was ok, note response
                     batchOp.noteBatchResponse(*batch, batchedCommandResponse, &trackedErrors);
 
-                    // Note if anything was stale
                     const auto& staleErrors =
                         trackedErrors.getErrors(ErrorCodes::StaleShardVersion);
                     if (!staleErrors.empty()) {
@@ -307,6 +478,72 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
                         // version on retry and make sure we route to the correct shard.
                         targeter.noteCouldNotTarget();
                     }
+
+                    // non transactions case
+                    const auto& wouldErrors =
+                        trackedErrors.getErrors(ErrorCodes::WouldChangeOwningShard);
+                    if (!wouldErrors.empty()) {
+                        log() << "xxx got would change error";
+
+                        for (const auto& error : wouldErrors) {
+                            BSONObjBuilder extraInfoBuilder;
+                            error.error.toStatus().extraInfo()->serialize(&extraInfoBuilder);
+                            auto extraInfo = extraInfoBuilder.obj();
+                            log() << extraInfo;
+                            auto wouldChangeInfo =
+                                WouldChangeOwningShardInfo::parseFromCommandError(extraInfo);
+
+                            /*
+                            this stuff for if we allow non-retryable writes updates
+
+                            TxnNumber txnNumber = TxnNumber{0};
+                            if (opCtx->getTxnNumber())
+                                txnNumber = opCtx->getTxnNumber().get();*/
+
+                            /*LogicalSessionId lsid;
+                            // Have to do this only when have txn number as well for now until
+                            // figure out driver incrementing txn number
+                            if (opCtx->getLogicalSessionId() && opCtx->getTxnNumber()) {
+                                lsid = opCtx->getLogicalSessionId().get();
+                            } else {
+                                ServiceContext* serviceContext = opCtx->getServiceContext();
+                                auto lsCache = LogicalSessionCache::get(serviceContext);
+                                boost::optional<LogicalSessionRecord> record =
+                                    makeLogicalSessionRecord(opCtx, lsCache->now());
+                                lsid = record.get().getId();
+                                uassertStatusOK(lsCache->startSession(opCtx, record.get()));
+                            }*/
+                            
+                            if (opCtx->getTxnNumber() && !TransactionRouter::get(opCtx)) {
+                                auto lsid = opCtx->getLogicalSessionId().get();
+                                auto txnNumber = opCtx->getTxnNumber().get();
+
+                                uassertStatusOK(updateShardKey(opCtx,
+                                                           nss,
+                                                           wouldChangeInfo,
+                                                           txnNumber,
+                                                           lsid,
+                                                           boost::none,
+                                                           false));
+                            } else {
+                                // ERROR HERE maybe uassert above
+
+                                /*
+                                ServiceContext* serviceContext = opCtx->getServiceContext();
+                                auto lsCache = LogicalSessionCache::get(serviceContext);
+                                boost::optional<LogicalSessionRecord> record =
+                                    makeLogicalSessionRecord(opCtx, lsCache->now());
+                                lsid = record.get().getId();
+                                uassertStatusOK(lsCache->startSession(opCtx, record.get()));
+
+                                txnNumber = TxnNumber{0};*/
+                            }
+                        }
+                    }
+
+                    auto batchStatus = batchedCommandResponse.toStatus();
+                    
+                    batchOp.clearUpdateShardKeyError(*batch, batchedCommandResponse);
 
                     // Remember that we successfully wrote to this shard
                     // NOTE: This will record lastOps for shards where we actually didn't update
@@ -343,8 +580,9 @@ void BatchWriteExec::executeBatch(OperationContext* opCtx,
         ++stats->numRounds;
 
         // If we're done, get out
-        if (batchOp.isFinished())
+        if (batchOp.isFinished()) {
             break;
+        }
 
         // MORE WORK TO DO
 

@@ -87,6 +87,7 @@
 #include "mongo/rpc/metadata/tracking_metadata.h"
 #include "mongo/rpc/op_msg.h"
 #include "mongo/rpc/reply_builder_interface.h"
+#include "mongo/s/would_change_owning_shard_exception.h"
 #include "mongo/util/fail_point_service.h"
 #include "mongo/util/log.h"
 #include "mongo/util/scopeguard.h"
@@ -408,6 +409,11 @@ void invokeWithSessionCheckedOut(OperationContext* opCtx,
         txnParticipant->stashTransactionResources(opCtx);
         guard.dismiss();
         throw;
+    } catch (const ExceptionFor<ErrorCodes::WouldChangeOwningShard>&) {
+        txnParticipant->stashTransactionResources(opCtx, true);
+
+        guard.dismiss();
+        throw;
     }
 
     if (auto okField = replyBuilder->getBodyBuilder().asTempObj()["ok"]) {
@@ -417,8 +423,15 @@ void invokeWithSessionCheckedOut(OperationContext* opCtx,
         }
     }
 
+    bool hasWouldChangeOwningShardError = false;
+    if (auto writeErrorsField = replyBuilder->getBodyBuilder().asTempObj()["writeErrors"]) {
+        if (writeErrorsField.Array()[0]["code"].numberInt() == ErrorCodes::WouldChangeOwningShard) {
+            hasWouldChangeOwningShardError = true;
+        }
+    }
+    
     // Stash or commit the transaction when the command succeeds.
-    txnParticipant->stashTransactionResources(opCtx);
+    txnParticipant->stashTransactionResources(opCtx, hasWouldChangeOwningShardError);
     guard.dismiss();
 } catch (const ExceptionFor<ErrorCodes::NoSuchTransaction>&) {
     // We make our decision about the transaction state based on the oplog we have, so
@@ -552,7 +565,6 @@ void execCommandDatabase(OperationContext* opCtx,
     auto startOperationTime = getClientOperationTime(opCtx);
     auto invocation = command->parse(opCtx, request);
     OperationSessionInfoFromClient sessionOptions;
-
     try {
         {
             stdx::lock_guard<Client> lk(*opCtx->getClient());
@@ -1038,7 +1050,6 @@ void receivedUpdate(OperationContext* opCtx, const NamespaceString& nsString, co
                                singleUpdate.getMulti(),
                                status.code());
     uassertStatusOK(status);
-
     performUpdates(opCtx, updateOp);
 }
 

@@ -432,7 +432,7 @@ void TransactionParticipant::beginOrContinue(TxnNumber txnNumber,
         // that indicates it has been involved in a two phase commit. In normal operation this check
         // should never fail.
         const auto restartableStates =
-            TransactionState::kInProgress | TransactionState::kAbortedWithoutPrepare;
+            TransactionState::kInProgress | TransactionState::kAbortedWithoutPrepare | TransactionState::kRetryableWriteToMultiStmt;
         uassert(50911,
                 str::stream() << "Cannot start a transaction at given transaction number "
                               << txnNumber
@@ -537,11 +537,13 @@ TransactionParticipant::OplogSlotReserver::~OplogSlotReserver() {
     }
 }
 
-TransactionParticipant::TxnResources::TxnResources(OperationContext* opCtx, StashStyle stashStyle) {
+TransactionParticipant::TxnResources::TxnResources(OperationContext* opCtx,
+                                                   StashStyle stashStyle,
+                                                   bool wouldChangeError) {
     // We must lock the Client to change the Locker on the OperationContext.
     stdx::lock_guard<Client> lk(*opCtx->getClient());
-
     _ruState = opCtx->getWriteUnitOfWork()->release();
+
     opCtx->setWriteUnitOfWork(nullptr);
 
     _locker = opCtx->swapLockState(stdx::make_unique<LockerImpl>());
@@ -640,7 +642,9 @@ TransactionParticipant::SideTransactionBlock::~SideTransactionBlock() {
         _txnResources->release(_opCtx);
     }
 }
-void TransactionParticipant::_stashActiveTransaction(WithLock, OperationContext* opCtx) {
+void TransactionParticipant::_stashActiveTransaction(WithLock,
+                                                     OperationContext* opCtx,
+                                                     bool wouldChangeError) {
     if (_inShutdown) {
         return;
     }
@@ -659,11 +663,12 @@ void TransactionParticipant::_stashActiveTransaction(WithLock, OperationContext*
     invariant(!_txnResourceStash);
     auto stashStyle = opCtx->writesAreReplicated() ? TxnResources::StashStyle::kPrimary
                                                    : TxnResources::StashStyle::kSecondary;
-    _txnResourceStash = TxnResources(opCtx, stashStyle);
+    _txnResourceStash = TxnResources(opCtx, stashStyle, wouldChangeError);
 }
 
 
-void TransactionParticipant::stashTransactionResources(OperationContext* opCtx) {
+void TransactionParticipant::stashTransactionResources(OperationContext* opCtx,
+                                                       bool wouldChangeError) {
     if (opCtx->getClient()->isInDirectClient()) {
         return;
     }
@@ -677,11 +682,15 @@ void TransactionParticipant::stashTransactionResources(OperationContext* opCtx) 
     _checkIsActiveTransaction(lg, *opCtx->getTxnNumber(), false);
 
     if (!_txnState.inMultiDocumentTransaction(lg)) {
+        if (wouldChangeError) {
+            _resetRetryableWriteState(lg);
+            _resetTransactionState(lg, TransactionState::kRetryableWriteToMultiStmt);
+        }
         // Not in a multi-document transaction: nothing to do.
         return;
     }
 
-    _stashActiveTransaction(lg, opCtx);
+    _stashActiveTransaction(lg, opCtx, wouldChangeError);
 }
 
 void TransactionParticipant::unstashTransactionResources(OperationContext* opCtx,
@@ -1464,6 +1473,8 @@ std::string TransactionParticipant::TransactionState::toString(StateFlag state) 
             return "TxnState::AbortedWithoutPrepare";
         case TransactionParticipant::TransactionState::kAbortedWithPrepare:
             return "TxnState::AbortedAfterPrepare";
+        case TransactionParticipant::TransactionState::kRetryableWriteToMultiStmt:
+            return "TxnState::RetryableWriteToMultiStmt";
     }
     MONGO_UNREACHABLE;
 }
@@ -1475,6 +1486,8 @@ bool TransactionParticipant::TransactionState::_isLegalTransition(StateFlag oldS
             switch (newState) {
                 case kNone:
                 case kInProgress:
+                    return true;
+                case kRetryableWriteToMultiStmt:
                     return true;
                 default:
                     return false;
@@ -1542,6 +1555,15 @@ bool TransactionParticipant::TransactionState::_isLegalTransition(StateFlag oldS
                 default:
                     return false;
             }
+        case kRetryableWriteToMultiStmt:
+            switch (newState) {
+                case kNone:
+                case kInProgress:
+                    return true;
+                default:
+                    return false;
+            }
+            MONGO_UNREACHABLE;
             MONGO_UNREACHABLE;
     }
     MONGO_UNREACHABLE;

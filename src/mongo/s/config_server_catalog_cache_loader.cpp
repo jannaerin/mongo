@@ -98,7 +98,7 @@ CollectionAndChangedChunks getChangedChunks(OperationContext* opCtx,
                                             const NamespaceString& nss,
                                             ChunkVersion sinceVersion) {
     const auto catalogClient = Grid::get(opCtx)->catalogClient();
-
+    
     // Decide whether to do a full or partial load based on the state of the collection
     const auto coll = uassertStatusOK(catalogClient->getCollection(opCtx, nss)).value;
     uassert(ErrorCodes::NamespaceNotFound,
@@ -122,11 +122,11 @@ CollectionAndChangedChunks getChangedChunks(OperationContext* opCtx,
                                                      boost::none,
                                                      &opTime,
                                                      repl::ReadConcernLevel::kMajorityReadConcern));
-
+    
     uassert(ErrorCodes::ConflictingOperationInProgress,
             "No chunks were found for the collection",
             !changedChunks.empty());
-
+    
     return CollectionAndChangedChunks(coll.getUUID(),
                                       coll.getEpoch(),
                                       coll.getKeyPattern().toBSON(),
@@ -176,10 +176,10 @@ void ConfigServerCatalogCacheLoader::waitForDatabaseFlush(OperationContext* opCt
 std::shared_ptr<Notification<void>> ConfigServerCatalogCacheLoader::getChunksSince(
     const NamespaceString& nss, ChunkVersion version, GetChunksSinceCallbackFn callbackFn) {
     auto notify = std::make_shared<Notification<void>>();
-
+    
     uassertStatusOK(_threadPool.schedule([ nss, version, notify, callbackFn ]() noexcept {
         auto opCtx = Client::getCurrent()->makeOperationContext();
-
+        
         auto swCollAndChunks = [&]() -> StatusWith<CollectionAndChangedChunks> {
             try {
                 return getChangedChunks(opCtx.get(), nss, version);
@@ -191,7 +191,7 @@ std::shared_ptr<Notification<void>> ConfigServerCatalogCacheLoader::getChunksSin
         callbackFn(opCtx.get(), std::move(swCollAndChunks));
         notify->set();
     }));
-
+    
     return notify;
 }
 

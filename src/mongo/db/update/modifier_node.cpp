@@ -27,7 +27,7 @@
  *    exception statement from all source files in the program, then also delete
  *    it in the license file.
  */
-
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kSharding
 #include "mongo/platform/basic.h"
 
 #include "mongo/db/update/modifier_node.h"
@@ -35,10 +35,12 @@
 #include "mongo/db/bson/dotted_path_support.h"
 #include "mongo/db/update/path_support.h"
 #include "mongo/db/update/storage_validation.h"
+#include "mongo/util/log.h"
 
 namespace mongo {
 
 namespace {
+constexpr StringData kIdFieldName = "_id"_sd;
 
 /**
  * Checks that no immutable paths were modified in the case where we are modifying an existing path
@@ -60,6 +62,7 @@ void checkImmutablePathsNotModifiedFromOriginal(mutablebson::Element element,
                                                 BSONObj original) {
     for (auto immutablePath = immutablePaths.begin(); immutablePath != immutablePaths.end();
          ++immutablePath) {
+        log() << "xxx looking at immutable path " << (*immutablePath)->dottedField();
         auto prefixSize = pathTaken->commonPrefixSize(**immutablePath);
 
         // If 'immutablePath' is a (strict or non-strict) prefix of 'pathTaken', and the update is
@@ -104,12 +107,14 @@ void checkImmutablePathsNotModifiedFromOriginal(mutablebson::Element element,
                                   << (*immutablePath)->dottedField()
                                   << "' was found to have been removed.",
                     newElem.ok());
-            uassert(ErrorCodes::ImmutableField,
-                    str::stream() << "After applying the update, the immutable field '"
-                                  << (*immutablePath)->dottedField()
-                                  << "' was found to have been altered to "
-                                  << newElem.toString(),
-                    newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
+            if (oldElem.fieldName() == kIdFieldName) {
+                uassert(ErrorCodes::ImmutableField,
+                        str::stream() << "After applying the update, the immutable field '"
+                                      << (*immutablePath)->dottedField()
+                                      << "' was found to have been altered to "
+                                      << newElem.toString(),
+                        newElem.compareWithBSONElement(oldElem, nullptr, false) == 0);
+            }
         }
     }
 }
@@ -135,13 +140,23 @@ void checkImmutablePathsNotModified(mutablebson::Element element,
                                     const FieldRefSet& immutablePaths) {
     for (auto immutablePath = immutablePaths.begin(); immutablePath != immutablePaths.end();
          ++immutablePath) {
-        uassert(ErrorCodes::ImmutableField,
-                str::stream() << "Performing an update on the path '" << pathTaken->dottedField()
-                              << "' would modify the immutable field '"
-                              << (*immutablePath)->dottedField()
-                              << "'",
-                pathTaken->commonPrefixSize(**immutablePath) <
-                    std::min(pathTaken->numParts(), (*immutablePath)->numParts()));
+        log() << "xxx looking at immutable path " << (*immutablePath)->dottedField();
+        for (size_t i = 0; i < (*immutablePath)->numParts(); ++i) {
+            auto newElem = element[(*immutablePath)->getPart(i)];
+            if (!newElem.ok()) {
+                break;
+            }
+            if (newElem.getFieldName() == kIdFieldName) {
+                uassert(ErrorCodes::ImmutableField,
+                        str::stream() << "Performing an update on the path '"
+                                      << pathTaken->dottedField()
+                                      << "' would modify the immutable field '"
+                                      << (*immutablePath)->dottedField()
+                                      << "'",
+                        pathTaken->commonPrefixSize(**immutablePath) <
+                            std::min(pathTaken->numParts(), (*immutablePath)->numParts()));
+            }
+        }
     }
 }
 

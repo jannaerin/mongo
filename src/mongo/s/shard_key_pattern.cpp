@@ -216,7 +216,6 @@ std::string ShardKeyPattern::toString() const {
 
 bool ShardKeyPattern::isShardKey(const BSONObj& shardKey) const {
     const auto& keyPatternBSON = _keyPattern.toBSON();
-
     for (const auto& patternEl : keyPatternBSON) {
         BSONElement keyEl = shardKey[patternEl.fieldNameStringData()];
 

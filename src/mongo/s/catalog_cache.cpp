@@ -605,7 +605,6 @@ void CatalogCache::_scheduleCollectionRefresh(WithLock lk,
         try {
             newRoutingInfo = refreshCollectionRoutingInfo(
                 opCtx, nss, std::move(existingRoutingInfo), std::move(swCollAndChunks));
-
             onRefreshCompleted(Status::OK(), newRoutingInfo.get());
         } catch (const DBException& ex) {
             stdx::lock_guard<stdx::mutex> lg(_mutex);

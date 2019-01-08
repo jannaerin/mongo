@@ -27,7 +27,7 @@
  *    exception statement from all source files in the program, then also delete
  *    it in the license file.
  */
-
+#define MONGO_LOG_DEFAULT_COMPONENT ::mongo::logger::LogComponent::kCommand
 #include "mongo/platform/basic.h"
 
 #include "mongo/base/status_with.h"
@@ -50,6 +50,14 @@
 #include "mongo/s/transaction_router.h"
 #include "mongo/s/write_ops/cluster_write.h"
 #include "mongo/util/timer.h"
+#include "mongo/db/logical_session_cache.h"
+#include "mongo/db/operation_context.h"
+#include "mongo/util/log.h"
+#include "mongo/db/logical_session_id.h"
+#include "mongo/db/session_catalog.h"
+#include "mongo/db/logical_session_id_helpers.h"
+#include "mongo/s/would_change_owning_shard_exception.h"
+#include "mongo/transport/service_entry_point.h"
 
 namespace mongo {
 namespace {
@@ -75,6 +83,116 @@ BSONObj getShardKey(OperationContext* opCtx, const ChunkManager& chunkMgr, const
             "Query for sharded findAndModify must contain the shard key",
             !shardKey.isEmpty());
     return shardKey;
+}
+
+Status runUpdateShardKeyTxn(OperationContext* opCtx,
+                            std::vector<BSONObj> cmdObjs,
+                            NamespaceString nss,
+                            LogicalSessionId lsid,
+                            boost::optional<int> stmtId,
+                            bool inTxn) {
+    auto executor = Grid::get(opCtx)->getExecutorPool()->getFixedExecutor();
+    if (inTxn) {
+        OperationContextSession::checkIn(opCtx);
+    }
+    for (std::size_t i = 0; i != cmdObjs.size(); ++i) {
+        auto cbHandle = uassertStatusOK(
+            executor->scheduleWork([ nss, cmdObj = cmdObjs[i], lsid, i, stmtId, inTxn ](
+                const executor::TaskExecutor::CallbackArgs& args) {
+                log() << "xxx top of lambda";
+                ThreadClient threadClient("UpdateShardKey", getGlobalServiceContext());
+                auto opCtxHolder = Client::getCurrent()->makeOperationContext();
+                auto opCtx = opCtxHolder.get();
+
+                BSONObjBuilder cmdObjWithLsidBuilder(cmdObj);
+                cmdObjWithLsidBuilder.append("lsid", lsid.toBSON());
+                if (stmtId) {
+                    cmdObjWithLsidBuilder.append("stmtId", stmtId.get());
+                } else {
+                    cmdObjWithLsidBuilder.append("stmtId", static_cast<int>(i));
+                }
+                if (!inTxn && (cmdObj["delete"])) {
+                    cmdObjWithLsidBuilder.append("startTransaction", true);
+                }
+
+                auto b = cmdObjWithLsidBuilder.obj();
+
+                auto db = nss.db();
+                if (cmdObj["commitTransaction"]) {
+                    db = NamespaceString::kAdminDb;
+                }
+                auto requestOpMsg = OpMsgRequest::fromDBAndBody(db, b).serialize();
+
+                const auto replyMsg = OpMsg::parseOwned(opCtx->getServiceContext()
+                                                            ->getServiceEntryPoint()
+                                                            ->handleRequest(opCtx, requestOpMsg)
+                                                            .response);
+
+                invariant(replyMsg.sequences.empty());
+
+                return replyMsg.body;
+            }));
+
+        executor->wait(cbHandle, opCtx);
+    }
+
+    return Status::OK();
+}
+
+Status updateShardKey(OperationContext* opCtx,
+                      NamespaceString nss,
+                      WouldChangeOwningShardInfo errInfo,
+                      TxnNumber txnNumber,
+                      LogicalSessionId lsid,
+                      boost::optional<int> stmtId,
+                      bool inTxn) {
+
+    write_ops::Delete deleteOp(nss);
+    deleteOp.setDeletes({[&] {
+        write_ops::DeleteOpEntry entry;
+        entry.setQ(errInfo.getOriginalShardKey());
+        entry.setMulti(false);
+        return entry;
+    }()});
+
+    write_ops::Insert insertOp(nss);
+    insertOp.setDocuments({errInfo.getPostImg()});
+
+    std::vector<BSONObj> cmdsToRunInTxn;
+
+    if (inTxn) {
+        auto deleteCmdObj =
+            deleteOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+        auto insertCmdObj =
+            insertOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+
+        cmdsToRunInTxn.emplace_back(deleteCmdObj);
+        cmdsToRunInTxn.emplace_back(insertCmdObj);
+        auto updateStatus = runUpdateShardKeyTxn(opCtx, cmdsToRunInTxn, nss, lsid, stmtId, inTxn);
+        uassertStatusOK(updateStatus);
+        return updateStatus;
+    } else {
+
+        auto deleteCmdObj =
+            deleteOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false << "readConcern"
+                                             << BSON("level"
+                                                     << "snapshot")));
+
+        auto insertCmdObj =
+            insertOp.toBSON(BSON("txnNumber" << txnNumber << "autocommit" << false));
+
+        auto commitCmdObj =
+            BSON("commitTransaction" << 1 << "txnNumber" << txnNumber << "autocommit" << false);
+
+        cmdsToRunInTxn.emplace_back(deleteCmdObj);
+        cmdsToRunInTxn.emplace_back(insertCmdObj);
+        cmdsToRunInTxn.emplace_back(commitCmdObj);
+        auto updateStatus = runUpdateShardKeyTxn(opCtx, cmdsToRunInTxn, nss, lsid, stmtId, inTxn);
+
+        return updateStatus;
+    }
 }
 
 class FindAndModifyCmd : public BasicCommand {
@@ -210,7 +328,7 @@ private:
                 shardId,
                 appendShardVersion(CommandHelpers::filterCommandRequestForPassthrough(cmdObj),
                                    shardVersion));
-
+            log() << "xxx impl find and mod mongos";
             bool isRetryableWrite = opCtx->getTxnNumber() && !TransactionRouter::get(opCtx);
 
             MultiStatementTransactionRequestsSender ars(
@@ -236,14 +354,66 @@ private:
             uassertStatusOK(responseStatus.withContext("findAndModify"));
         }
 
-        // First append the properly constructed writeConcernError. It will then be skipped in
-        // appendElementsUnique.
-        if (auto wcErrorElem = response.data["writeConcernError"]) {
-            appendWriteConcernErrorToCmdResponse(shardId, wcErrorElem, *result);
-        }
+        if (responseStatus.code() == ErrorCodes::WouldChangeOwningShard) {
+            log() << "xxx got would change status in cluster find and mod";
+            BSONObjBuilder extraInfoBuilder;
+            responseStatus.extraInfo()->serialize(&extraInfoBuilder);
+            auto extraInfo = extraInfoBuilder.obj();
+            auto wouldChangeInfo =
+                WouldChangeOwningShardInfo::parseFromCommandError(extraInfo);
+            log() << "xxx response data " << response.data;
+            Status txnStatus = Status::OK();
+            if (TransactionRouter::get(opCtx)) {
+                boost::optional<int> stmtIdToSend;
+                /*if (request["stmtIds"]) {
+                    stmtIdToSend = request["stmtIds"][0];
+                    log() << "xxx send " << stmtIdToSend.get();
+                }*/
 
-        result->appendElementsUnique(
-            CommandHelpers::filterCommandReplyForPassthrough(response.data));
+                txnStatus = updateShardKey(opCtx,
+                                               nss,
+                                               wouldChangeInfo,
+                                               opCtx->getTxnNumber().get(),
+                                               opCtx->getLogicalSessionId().get(),
+                                               boost::none,
+                                               true);
+                uassertStatusOK(txnStatus);
+            } else if (opCtx->getTxnNumber() && !TransactionRouter::get(opCtx)) {
+                // retryable write
+                auto lsid = opCtx->getLogicalSessionId().get();
+                auto txnNumber = opCtx->getTxnNumber().get();
+
+                txnStatus = updateShardKey(opCtx,
+                                           nss,
+                                           wouldChangeInfo,
+                                           txnNumber,
+                                           lsid,
+                                           boost::none,
+                                           false);
+
+                uassertStatusOK(txnStatus);
+            }
+            // do something to return correctly here
+            BSONObjBuilder responseBuilder;
+            responseBuilder.append("value", wouldChangeInfo.getPostImg());
+            BSONObjBuilder subBuilder (responseBuilder.subobjStart("lastErrorObject"));
+            subBuilder.appendBool("n", 1);
+            subBuilder.appendBool("updatedExisting", true);
+            subBuilder.done();
+
+            result->appendElementsUnique(
+                CommandHelpers::filterCommandReplyForPassthrough(responseBuilder.obj()));
+        } else {
+
+            // First append the properly constructed writeConcernError. It will then be skipped in
+            // appendElementsUnique.
+            if (auto wcErrorElem = response.data["writeConcernError"]) {
+                appendWriteConcernErrorToCmdResponse(shardId, wcErrorElem, *result);
+            }
+            
+            result->appendElementsUnique(
+                CommandHelpers::filterCommandReplyForPassthrough(response.data));
+        }
     }
 
 } findAndModifyCmd;

@@ -101,7 +101,7 @@ public:
          * Stashes transaction state from 'opCtx' in the newly constructed TxnResources.
          * Ephemerally holds the Client lock associated with opCtx.
          */
-        TxnResources(OperationContext* opCtx, StashStyle stashStyle);
+        TxnResources(OperationContext* opCtx, StashStyle stashStyle, bool wouldChangeError = false);
         ~TxnResources();
 
         // Rule of 5: because we have a class-defined destructor, we need to explictly specify
@@ -224,7 +224,7 @@ public:
     /**
      * Transfers management of transaction resources from the OperationContext to the Session.
      */
-    void stashTransactionResources(OperationContext* opCtx);
+    void stashTransactionResources(OperationContext* opCtx, bool wouldChangeError = false);
 
     /**
      * Transfers management of transaction resources from the Session to the OperationContext.
@@ -574,7 +574,8 @@ private:
             kCommittingWithPrepare = 1 << 4,
             kCommitted = 1 << 5,
             kAbortedWithoutPrepare = 1 << 6,
-            kAbortedWithPrepare = 1 << 7
+            kAbortedWithPrepare = 1 << 7,
+            kRetryableWriteToMultiStmt = 1 << 8
         };
 
         using StateSet = int;
@@ -622,6 +623,10 @@ private:
 
         bool isAborted(WithLock) const {
             return _state == kAbortedWithoutPrepare || _state == kAbortedWithPrepare;
+        }
+
+        bool isRetryableWriteToMultiStmt(WithLock) const {
+            return _state == kRetryableWriteToMultiStmt;
         }
 
         std::string toString() const {
@@ -696,7 +701,7 @@ private:
     void _commitStorageTransaction(OperationContext* opCtx);
 
     // Stash transaction resources.
-    void _stashActiveTransaction(WithLock, OperationContext* opCtx);
+    void _stashActiveTransaction(WithLock, OperationContext* opCtx, bool wouldChangeError = false);
 
     // Abort the transaction if it's in one of the expected states and clean up the transaction
     // states associated with the opCtx.
