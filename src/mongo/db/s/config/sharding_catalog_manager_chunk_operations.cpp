@@ -50,6 +50,7 @@
 #include "mongo/s/client/shard.h"
 #include "mongo/s/client/shard_registry.h"
 #include "mongo/s/grid.h"
+#include "mongo/s/request_types/set_shard_version_request.h"
 #include "mongo/s/shard_key_pattern.h"
 #include "mongo/util/fail_point.h"
 #include "mongo/util/log.h"
@@ -893,6 +894,158 @@ StatusWith<BSONObj> ShardingCatalogManager::commitChunkMigration(
     }
 
     return result.obj();
+}
+
+Status ShardingCatalogManager::commitSplitChunksOnShard(
+    OperationContext* opCtx,
+    const std::vector<ChunkType>& chunksToMove,
+    // const OID& collectionEpoch,
+    const ShardId& fromShard,
+    const ShardId& toShard,
+    const boost::optional<Timestamp>& validAfter) {
+
+    auto const configShard = Grid::get(opCtx)->shardRegistry()->getConfigShard();
+
+    // Take _kChunkOpLock in exclusive mode to prevent concurrent chunk splits, merges, and
+    // migrations.
+    //
+    // ConfigSvrCommitChunkMigration commands must be run serially because the new ChunkVersions
+    // for migrated chunks are generated within the command and must be committed to the database
+    // before another chunk commit generates new ChunkVersions in the same manner.
+    //
+    // TODO(SERVER-25359): Replace with a collection-specific lock map to allow splits/merges/
+    // move chunks on different collections to proceed in parallel.
+    // (Note: This is not needed while we have a global lock, taken here only for consistency.)
+    // Lock::ExclusiveLock lk(opCtx->lockState(), _kChunkOpLock);
+
+    if (!validAfter) {
+        return {ErrorCodes::IllegalOperation, "chunk operation requires validAfter timestamp"};
+    }
+
+    std::map<NamespaceString, ChunkVersion> nssToVersion;
+    for (const auto& chunk : chunksToMove) {
+        if (chunk.getNS().db() == NamespaceString::kConfigDb) {
+            continue;
+        }
+
+        boost::optional<ChunkVersion> currentCollectionVersion;
+
+        auto versionIter = nssToVersion.find(chunk.getNS());
+        if (versionIter == nssToVersion.end()) {
+            // Must use local read concern because we will perform subsequent writes.
+            auto findResponse = configShard->exhaustiveFindOnConfig(
+                opCtx,
+                ReadPreferenceSetting{ReadPreference::PrimaryOnly},
+                repl::ReadConcernLevel::kLocalReadConcern,
+                ChunkType::ConfigNS,
+                BSON("ns" << chunk.getNS().ns()),
+                BSON(ChunkType::lastmod << -1),
+                1);
+            if (!findResponse.isOK()) {
+                return findResponse.getStatus();
+            }
+
+            if (MONGO_unlikely(migrationCommitVersionError.shouldFail())) {
+                uassert(ErrorCodes::StaleEpoch,
+                        "failpoint 'migrationCommitVersionError' generated error",
+                        false);
+            }
+
+            const auto chunksVector = std::move(findResponse.getValue().docs);
+            if (chunksVector.empty()) {
+                return {ErrorCodes::IncompatibleShardingMetadata,
+                        str::stream() << "Tried to find max chunk version for collection '"
+                                      << chunk.getNS().ns() << ", but found no chunks"};
+            }
+
+            const auto swChunk = ChunkType::fromConfigBSON(chunksVector.front());
+            if (!swChunk.isOK()) {
+                return swChunk.getStatus();
+            }
+
+            currentCollectionVersion = swChunk.getValue().getVersion();
+        } else {
+            currentCollectionVersion = versionIter->second;
+        }
+
+        // Check that migratedChunk is where it should be, on fromShard.
+        auto migratedOnShard =
+            checkChunkIsOnShard(opCtx, chunk.getNS(), chunk.getMin(), chunk.getMax(), fromShard);
+        if (!migratedOnShard.isOK()) {
+            return migratedOnShard;
+        }
+
+        // Find the chunk history.
+        const auto origChunk = _findChunkOnConfig(opCtx, chunk.getNS(), chunk.getMin());
+        if (!origChunk.isOK()) {
+            return origChunk.getStatus();
+        }
+
+        // Generate the new versions of migratedChunk and controlChunk. Migrating chunk's minor
+        // version will be 0.
+        auto newCollectionVersion = ChunkVersion(
+            currentCollectionVersion->majorVersion() + 1, 0, currentCollectionVersion->epoch());
+        ChunkType newMigratedChunk = chunk;
+        newMigratedChunk.setName(origChunk.getValue().getName());
+        newMigratedChunk.setShard(toShard);
+        newMigratedChunk.setVersion(newCollectionVersion);
+        nssToVersion[chunk.getNS()] = newCollectionVersion;
+
+        // Copy the complete history.
+        auto newHistory = origChunk.getValue().getHistory();
+        const int kHistorySecs = 10;
+
+        invariant(validAfter);
+
+        // Update the history of the migrated chunk.
+        // Drop the history that is too old (10 seconds of history for now).
+        // TODO SERVER-33831 to update the old history removal policy.
+        if (!MONGO_unlikely(skipExpiringOldChunkHistory.shouldFail())) {
+            while (!newHistory.empty() &&
+                   newHistory.back().getValidAfter().getSecs() + kHistorySecs <
+                       validAfter.get().getSecs()) {
+                newHistory.pop_back();
+            }
+        }
+
+        if (!newHistory.empty() && newHistory.front().getValidAfter() >= validAfter.get()) {
+            return {ErrorCodes::IncompatibleShardingMetadata,
+                    str::stream() << "The chunk history for chunk with namespace "
+                                  << chunk.getNS().ns() << " and min key " << chunk.getMin()
+                                  << " is corrupted. The last validAfter "
+                                  << newHistory.back().getValidAfter().toString()
+                                  << " is greater or equal to the new validAfter "
+                                  << validAfter.get().toString()};
+        }
+        newHistory.emplace(newHistory.begin(), ChunkHistory(validAfter.get(), toShard));
+        newMigratedChunk.setHistory(std::move(newHistory));
+
+        // Control chunk's minor version will be 1 (if control chunk is present).
+        boost::optional<ChunkType> newControlChunk = boost::none;
+
+        auto command = makeCommitChunkTransactionCommand(chunk.getNS(),
+                                                         newMigratedChunk,
+                                                         newControlChunk,
+                                                         fromShard.toString(),
+                                                         toShard.toString());
+        StatusWith<Shard::CommandResponse> applyOpsCommandResponse =
+            configShard->runCommandWithFixedRetryAttempts(
+                opCtx,
+                ReadPreferenceSetting{ReadPreference::PrimaryOnly},
+                chunk.getNS().db().toString(),
+                command,
+                Shard::RetryPolicy::kIdempotent);
+
+        if (!applyOpsCommandResponse.isOK()) {
+            return applyOpsCommandResponse.getStatus();
+        }
+
+        if (!applyOpsCommandResponse.getValue().commandStatus.isOK()) {
+            return applyOpsCommandResponse.getValue().commandStatus;
+        }
+    }
+
+    return Status::OK();
 }
 
 StatusWith<ChunkType> ShardingCatalogManager::_findChunkOnConfig(OperationContext* opCtx,

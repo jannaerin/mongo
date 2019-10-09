@@ -725,6 +725,16 @@ tasks:
     - func: "run test"
     - func: "analyze"
 
+- name: mitosis_workloads
+  priority: 5
+  commands:
+    - func: "prepare environment"
+      vars:
+        test: "mitosis"
+    - func: "deploy cluster"
+    - func: "run test"
+    - func: "analyze"
+
 - name: mongos_workloads
   priority: 5
   commands:
@@ -1255,6 +1265,24 @@ buildvariants:
     - name: retryable_writes_workloads
     - name: smoke_test
 
+- name: linux-shard-mitosis
+  display_name: Linux Shard Cluster For Mitosis
+  batchtime: 2880  # 48 hours
+  modules: *modules
+  expansions:
+    setup: shard-mitosis
+    cluster: shard-mitosis
+    platform: linux
+    project_dir: *project_dir
+    authentication: enabled
+    storageEngine: wiredTiger
+  run_on:
+      - "rhel70-perf-shard"
+  depends_on:
+      - name: compile
+        variant: compile-amazon2
+  tasks: &shardmitosistasks
+    - name: mitosis_workloads
 
 - name: linux-3-node-replSet
   display_name: Linux 3-Node ReplSet

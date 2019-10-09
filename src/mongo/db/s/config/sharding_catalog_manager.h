@@ -213,6 +213,16 @@ public:
                                              const boost::optional<Timestamp>& validAfter);
 
     /**
+     * Updates metadata in config.chunks so that chunks in 'chunksToMove' that were previously owned
+     * by 'fromShard' are now owned by 'toShard'
+     */
+    Status commitSplitChunksOnShard(OperationContext* opCtx,
+                                    const std::vector<ChunkType>& chunksToMove,
+                                    const ShardId& fromShard,
+                                    const ShardId& toShard,
+                                    const boost::optional<Timestamp>& validAfter);
+
+    /**
      * Removes the jumbo flag from the specified chunk.
      */
     void clearJumboFlag(OperationContext* opCtx,

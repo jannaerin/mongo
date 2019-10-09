@@ -218,6 +218,45 @@ void ShardServerOpObserver::onInserts(OperationContext* opCtx,
             }
         }
 
+        if (nss == NamespaceString::kRangeDeletionNamespace) {
+            if (!isStandaloneOrPrimary(opCtx))
+                return;
+
+            if (!insertedDoc["pending"]) {
+                auto deletionTask = RangeDeletionTask::parse(
+                    IDLParserErrorContext("ShardServerOpObserver"), insertedDoc);
+
+                const auto whenToClean = deletionTask.getWhenToClean() == CleanWhenEnum::kNow
+                    ? CollectionShardingRuntime::kNow
+                    : CollectionShardingRuntime::kDelayed;
+
+                AutoGetCollection autoColl(opCtx, deletionTask.getNss(), MODE_IS);
+
+                if (!autoColl.getCollection() ||
+                    autoColl.getCollection()->uuid() !=
+                        UUID::parse(deletionTask.getCollectionUuid().toString())) {
+                    LOG(0) << "Collection UUID doesn't match the one marked for deletion: "
+                        /*<< autoColl.getCollection()->uuid()
+                        << " != " << deletionTask.getCollectionUuid()*/
+                        ;
+                } else {
+                    LOG(0) << "Scheduling range " << deletionTask.getRange() << " in namespace "
+                           << deletionTask.getNss() << " for deletion.";
+
+                    auto notification = CollectionShardingRuntime::get(opCtx, deletionTask.getNss())
+                                            ->cleanUpRange(*deletionTask.getRange(), whenToClean);
+
+                    if (notification.ready() && !notification.waitStatus(opCtx).isOK()) {
+                        LOG(0) << "xxx ANGRY after Scheduling range " << deletionTask.getRange()
+                               << " in namespace " << deletionTask.getNss() << " for deletion."
+                               << causedBy(notification.waitStatus(opCtx));
+                    }
+
+                    notification.abandon();
+                }
+            }
+        }
+
         if (metadata->isSharded()) {
             incrementChunkOnInsertOrUpdate(opCtx,
                                            nss,

@@ -89,6 +89,7 @@ env.Library(
         'cluster_validate_cmd.cpp',
         'cluster_whats_my_uri_cmd.cpp',
         'cluster_write_cmd.cpp',
+        'cluster_split_shard.cpp',
         'commands_public.cpp',
         'document_shard_key_update_util.cpp',
         'kill_sessions_remote.cpp',
