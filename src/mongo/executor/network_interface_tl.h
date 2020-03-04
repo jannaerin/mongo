@@ -200,8 +200,7 @@ private:
 
         Promise<void> promise;
         RemoteCommandResponse prevResponse;
-        Mutex _onReplyMutex =
-            MONGO_MAKE_LATCH(HierarchicalAcquisitionLevel(0), "NetworkInterfaceTL::_onReplyMutex");
+        Mutex _onReplyMutex = MONGO_MAKE_LATCH("NetworkInterfaceTL::_onReplyMutex");
         RemoteCommandOnReplyFn onReplyFn;
     };
 

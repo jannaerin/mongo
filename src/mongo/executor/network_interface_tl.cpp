@@ -775,6 +775,9 @@ Future<RemoteCommandResponse> NetworkInterfaceTL::ExhaustCommandState::sendReque
 
         // Reset the stopwatch to measure the correct duration for the folowing reply
         stopwatch.restart();
+        if (deadline != RemoteCommandRequest::kNoExpirationDate) {
+            deadline = stopwatch.start() + requestOnAny.timeout;
+        }
         setTimer();
 
         stdx::lock_guard lk(_onReplyMutex);

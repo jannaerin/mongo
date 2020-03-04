@@ -43,7 +43,7 @@ void TaskExecutor::schedule(OutOfLineExecutor::Task func) {
     if (!statusWithCallback.isOK()) {
         // The callback was not scheduled or moved from, it is still valid. Run it inline to inform
         // it of the error. Construct a CallbackArgs for it, only CallbackArgs::status matters here.
-        CallbackArgs args(this, {}, statusWithCallback.getStatus(), nullptr);
+        CallbackArgs args(this, {}, statusWithCallback.getStatus(), false, nullptr);
         cb(args);
     }
 }
@@ -65,10 +65,12 @@ TaskExecutor::EventHandle::EventHandle(std::shared_ptr<EventState> event)
 TaskExecutor::CallbackArgs::CallbackArgs(TaskExecutor* theExecutor,
                                          CallbackHandle theHandle,
                                          Status theStatus,
+                                         bool isMoreToComeSet,
                                          OperationContext* theTxn)
     : executor(theExecutor),
       myHandle(std::move(theHandle)),
       status(std::move(theStatus)),
+      isMoreToComeSet(isMoreToComeSet),
       opCtx(theTxn) {}
 
 
@@ -76,22 +78,33 @@ TaskExecutor::RemoteCommandCallbackArgs::RemoteCommandCallbackArgs(
     TaskExecutor* theExecutor,
     const CallbackHandle& theHandle,
     const RemoteCommandRequest& theRequest,
-    const ResponseStatus& theResponse)
-    : executor(theExecutor), myHandle(theHandle), request(theRequest), response(theResponse) {}
+    const ResponseStatus& theResponse,
+    bool isMoreToComeSet)
+    : executor(theExecutor),
+      myHandle(theHandle),
+      request(theRequest),
+      response(theResponse),
+      isMoreToComeSet(isMoreToComeSet) {}
 
 TaskExecutor::RemoteCommandCallbackArgs::RemoteCommandCallbackArgs(
     const RemoteCommandOnAnyCallbackArgs& other, size_t idx)
     : executor(other.executor),
       myHandle(other.myHandle),
       request(other.request, idx),
-      response(other.response) {}
+      response(other.response),
+      isMoreToComeSet(other.isMoreToComeSet) {}
 
 TaskExecutor::RemoteCommandOnAnyCallbackArgs::RemoteCommandOnAnyCallbackArgs(
     TaskExecutor* theExecutor,
     const CallbackHandle& theHandle,
     const RemoteCommandRequestOnAny& theRequest,
-    const ResponseOnAnyStatus& theResponse)
-    : executor(theExecutor), myHandle(theHandle), request(theRequest), response(theResponse) {}
+    const ResponseOnAnyStatus& theResponse,
+    bool isMoreToComeSet)
+    : executor(theExecutor),
+      myHandle(theHandle),
+      request(theRequest),
+      response(theResponse),
+      isMoreToComeSet(isMoreToComeSet) {}
 
 TaskExecutor::CallbackState* TaskExecutor::getCallbackFromHandle(const CallbackHandle& cbHandle) {
     return cbHandle.getCallback();

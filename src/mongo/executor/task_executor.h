@@ -480,11 +480,13 @@ struct TaskExecutor::CallbackArgs {
     CallbackArgs(TaskExecutor* theExecutor,
                  CallbackHandle theHandle,
                  Status theStatus,
+                 bool isMoreToComeSet = false,
                  OperationContext* opCtx = nullptr);
 
     TaskExecutor* executor;
     CallbackHandle myHandle;
     Status status;
+    bool isMoreToComeSet;
     OperationContext* opCtx;
 };
 
@@ -495,7 +497,8 @@ struct TaskExecutor::RemoteCommandCallbackArgs {
     RemoteCommandCallbackArgs(TaskExecutor* theExecutor,
                               const CallbackHandle& theHandle,
                               const RemoteCommandRequest& theRequest,
-                              const ResponseStatus& theResponse);
+                              const ResponseStatus& theResponse,
+                              bool isMoreToComeSet = false);
 
     RemoteCommandCallbackArgs(const RemoteCommandOnAnyCallbackArgs& other, size_t idx);
 
@@ -503,18 +506,21 @@ struct TaskExecutor::RemoteCommandCallbackArgs {
     CallbackHandle myHandle;
     RemoteCommandRequest request;
     ResponseStatus response;
+    bool isMoreToComeSet;
 };
 
 struct TaskExecutor::RemoteCommandOnAnyCallbackArgs {
     RemoteCommandOnAnyCallbackArgs(TaskExecutor* theExecutor,
                                    const CallbackHandle& theHandle,
                                    const RemoteCommandRequestOnAny& theRequest,
-                                   const ResponseOnAnyStatus& theResponse);
+                                   const ResponseOnAnyStatus& theResponse,
+                                   bool isMoreToComeSet = false);
 
     TaskExecutor* executor;
     CallbackHandle myHandle;
     RemoteCommandRequestOnAny request;
     ResponseOnAnyStatus response;
+    bool isMoreToComeSet;
 };
 
 }  // namespace executor
